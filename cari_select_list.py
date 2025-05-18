@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
+from database_progress import load_cari_list  # Veritabanı fonksiyonunu içe aktar
 
 class CariSelectListForm(QWidget):
     def __init__(self, parent_form=None):
@@ -56,7 +57,7 @@ class CariSelectListForm(QWidget):
         ana_layout.addLayout(filtre_layout)
 
         # Tablo
-        self.table = QTableWidget(3, 2)
+        self.table = QTableWidget(0, 2)  # Satır sayısını 0 olarak başlat
         self.table.setHorizontalHeaderLabels([
             "Cari Kodu", "Cari Adı / Ünvanı"
         ])
@@ -79,19 +80,20 @@ class CariSelectListForm(QWidget):
             }
         """)
 
-        # Örnek veriler
-        veriler = [
-            ["CR001", "FATİH ÖZ"],
-            ["TD002", "AHMET CANDAN"],
-            ["CR002", "MUSTAFA CAN"]
-        ]
-        for row, veri in enumerate(veriler):
-            for col, deger in enumerate(veri):
-                item = QTableWidgetItem(deger)
-                self.table.setItem(row, col, item)
+        # Veritabanından verileri yükle
+        self.load_data_to_table()
 
         ana_layout.addWidget(self.table)
         self.setLayout(ana_layout)
+
+    def load_data_to_table(self):
+        """Veritabanından gelen verileri tabloya yükler."""
+        cariler = load_cari_list()  # Veritabanından verileri al
+        print(cariler)
+        self.table.setRowCount(len(cariler))  # Satır sayısını ayarla
+        for row, (id,cari_kodu, cari_unvani,telefon,cari_tipi,borc) in enumerate(cariler):
+            self.table.setItem(row, 2, QTableWidgetItem(cari_kodu))
+            self.table.setItem(row, 1, QTableWidgetItem(cari_unvani))
 
     def stil_buton(self, text, icon_name, color):
         btn = QPushButton(icon(icon_name, color=color), text)
