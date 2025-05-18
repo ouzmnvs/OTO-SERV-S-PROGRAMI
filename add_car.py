@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
+from cari_select_list import CariSelectListForm  # En üste ekleyin
 
 class AddCarForm(QWidget):
     def __init__(self, dashboard_ref=None):
@@ -73,6 +74,7 @@ class AddCarForm(QWidget):
         sec_btn = QPushButton(icon('fa5s.user-check', color='black'), "Seç")
         sec_btn.setMinimumHeight(36)
         sec_btn.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
+        sec_btn.clicked.connect(self.cari_sec_ac)
         cari_layout.addWidget(sec_btn, 0, 2)
         lbl_cari_unvani = QLabel("Cari Ünvanı *")
         lbl_cari_unvani.setStyleSheet(label_style)
@@ -221,6 +223,14 @@ class AddCarForm(QWidget):
             print(f"Bir hata oluştu: {e}")
         finally:
             conn.close()
+
+    def cari_sec_ac(self):
+        self.cari_select_form = CariSelectListForm(parent_form=self)
+        self.cari_select_form.show()
+
+    def set_cari_bilgileri(self, cari_kodu, cari_unvani):
+        self.cari_kodu.setText(cari_kodu)
+        self.cari_unvani.setText(cari_unvani)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
