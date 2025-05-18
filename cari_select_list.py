@@ -92,7 +92,7 @@ class CariSelectListForm(QWidget):
         print(cariler)
         self.table.setRowCount(len(cariler))  # Satır sayısını ayarla
         for row, (id,cari_kodu, cari_unvani,telefon,cari_tipi,borc) in enumerate(cariler):
-            self.table.setItem(row, 2, QTableWidgetItem(cari_kodu))
+            self.table.setItem(row, 0, QTableWidgetItem(cari_kodu))
             self.table.setItem(row, 1, QTableWidgetItem(cari_unvani))
 
     def stil_buton(self, text, icon_name, color):

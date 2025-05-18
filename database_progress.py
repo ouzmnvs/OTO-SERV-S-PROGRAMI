@@ -11,3 +11,24 @@ def load_cari_list():
         return []
     finally:
         conn.close()
+
+def add_arac(cari_kodu, plaka, arac_tipi, model_yili, marka, model):
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        
+        # ARAÇ ekleme sorgusu
+        cursor.execute("""
+        INSERT INTO ARAÇLAR (cari_kodu, plaka, arac_tipi, model_yili, marka, model)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (cari_kodu, plaka, arac_tipi, model_yili, marka, model))
+        
+        conn.commit()
+        print("Araç başarıyla eklendi.")
+    except sqlite3.IntegrityError as e:
+        print(f"Veritabanı hatası: {e}")
+    except sqlite3.Error as e:
+        print(f"Bir hata oluştu: {e}")
+    finally:
+        conn.close()

@@ -191,7 +191,7 @@ class AddCarForm(QWidget):
 
     def kaydet_tiklandi(self):
         # Formdaki bilgileri al
-        cari_id = self.cari_kodu.text().strip()  # Cari ID'si
+        cari_kodu = self.cari_kodu.text().strip()  # Cari ID'si
         plaka = self.plaka.text().strip()
         arac_tipi = self.arac_tipi.currentText().strip()
         model_yili = self.model_yili.text().strip()
@@ -199,7 +199,7 @@ class AddCarForm(QWidget):
         model = self.model.text().strip()
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
-        if not cari_id or not plaka or not arac_tipi:
+        if not cari_kodu or not plaka or not arac_tipi:
             print("Lütfen gerekli alanları doldurun!")
             return
 
@@ -209,9 +209,9 @@ class AddCarForm(QWidget):
             conn = sqlite3.connect("oto_servis.db")
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO ARAÇLAR (cari_id, plaka, arac_tipi, model_yili, marka, model)
+                INSERT INTO ARAÇLAR (cari_kodu, plaka, arac_tipi, model_yili, marka, model)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (cari_id, plaka, arac_tipi, model_yili, marka, model))
+            """, (cari_kodu, plaka, arac_tipi, model_yili, marka, model))
             conn.commit()
             print("Araç başarıyla eklendi!")
             self.close()  # Formu kapat
