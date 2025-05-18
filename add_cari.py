@@ -92,7 +92,7 @@ class AddCariForm(QWidget):
         self.cari_tipi = QComboBox()
         self.cari_tipi.setStyleSheet(input_style)
         self.cari_tipi.setMinimumHeight(36)
-        self.cari_tipi.addItems(["", "Müşteri", "Tedarikçi", "Diğer"])
+        self.cari_tipi.addItems(["Bireysel", "Kurumsal", "Diğer"])
         cari_layout.addWidget(self.cari_tipi, 3, 1, 1, 2)
 
         cari_group.setLayout(cari_layout)
@@ -117,6 +117,7 @@ class AddCariForm(QWidget):
                 border: 2px solid #e91e63;
             }
         """)
+        kaydet_btn.clicked.connect(self.kaydet_tiklandi)
         iptal_btn = QPushButton(icon('fa5s.times', color='darkred'), "İptal")
         iptal_btn.setFixedWidth(140)
         iptal_btn.setMinimumHeight(44)
@@ -149,6 +150,39 @@ class AddCariForm(QWidget):
         self.close()
         if self.dashboard_ref:
             self.dashboard_ref.show()
+
+    def kaydet_tiklandi(self):
+        # Formdaki bilgileri al
+        cari_kodu = self.cari_kodu.text().strip()
+        cari_unvan = self.cari_unvan.text().strip()
+        telefon = self.telefon.text().strip()
+        cari_tipi = self.cari_tipi.currentText().strip()
+
+        # Gerekli alanların doldurulup doldurulmadığını kontrol et
+        if not cari_kodu or not cari_unvan or not cari_tipi:
+            print("Lütfen gerekli alanları doldurun!")
+            return
+
+        # Veritabanına ekle
+        try:
+            import sqlite3
+            conn = sqlite3.connect("oto_servis.db")
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO CARİ (cari_kodu, cari_ad_unvan, telefon, cari_tipi, borc)
+                VALUES (?, ?, ?, ?, ?)
+            """, (cari_kodu, cari_unvan, telefon,cari_tipi, 0))  # Borç varsayılan olarak 0
+            conn.commit()
+            print("Cari başarıyla eklendi!")
+            self.close()  # Formu kapat
+            if self.dashboard_ref:
+                self.dashboard_ref.show()
+        except sqlite3.IntegrityError as e:
+            print(f"Veritabanı hatası: {e}")
+        except Exception as e:
+            print(f"Bir hata oluştu: {e}")
+        finally:
+            conn.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

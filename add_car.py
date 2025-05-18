@@ -152,6 +152,7 @@ class AddCarForm(QWidget):
                 border: 2px solid #e91e63;
             }
         """)
+        kaydet_btn.clicked.connect(self.kaydet_tiklandi)
         iptal_btn = QPushButton(icon('fa5s.times', color='darkred'), "İptal")
         iptal_btn.setFixedWidth(140)
         iptal_btn.setMinimumHeight(44)
@@ -185,6 +186,41 @@ class AddCarForm(QWidget):
         self.close()
         if self.dashboard_ref:
             self.dashboard_ref.show()
+
+    def kaydet_tiklandi(self):
+        # Formdaki bilgileri al
+        cari_id = self.cari_kodu.text().strip()  # Cari ID'si
+        plaka = self.plaka.text().strip()
+        arac_tipi = self.arac_tipi.currentText().strip()
+        model_yili = self.model_yili.text().strip()
+        marka = self.marka.text().strip()
+        model = self.model.text().strip()
+
+        # Gerekli alanların doldurulup doldurulmadığını kontrol et
+        if not cari_id or not plaka or not arac_tipi:
+            print("Lütfen gerekli alanları doldurun!")
+            return
+
+        # Veritabanına ekle
+        try:
+            import sqlite3
+            conn = sqlite3.connect("oto_servis.db")
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO ARAÇLAR (cari_id, plaka, arac_tipi, model_yili, marka, model)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (cari_id, plaka, arac_tipi, model_yili, marka, model))
+            conn.commit()
+            print("Araç başarıyla eklendi!")
+            self.close()  # Formu kapat
+            if self.dashboard_ref:
+                self.dashboard_ref.show()
+        except sqlite3.IntegrityError as e:
+            print(f"Veritabanı hatası: {e}")
+        except Exception as e:
+            print(f"Bir hata oluştu: {e}")
+        finally:
+            conn.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
