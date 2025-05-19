@@ -10,6 +10,7 @@ from add_car import AddCarForm  # Satırın başına ekle
 from add_cari import AddCariForm  # <-- Bunu da ekle
 from car_list import CarListForm  # En üste ekle
 from cari_list import CariListForm  # En üste ekleyin
+from servis_form import ServisForm  # En üste ekleyin
 
 class Dashboard(QWidget):
     def __init__(self):
@@ -109,7 +110,9 @@ class Dashboard(QWidget):
         ana_layout.addWidget(self.bolum_baslik("SERVİS İŞLEMLERİ"))
         is_tanim_layout = QHBoxLayout()
         is_tanim_layout.setSpacing(15)
-        is_tanim_layout.addWidget(self.renkli_buton("SERVİS GİRİŞİ EKLE", 'fa5s.tools', 'brown'))
+        btn_servis_girisi = self.renkli_buton("SERVİS GİRİŞİ EKLE", 'fa5s.tools', 'brown')
+        btn_servis_girisi.clicked.connect(self.servis_girisi_ekle_ac)
+        is_tanim_layout.addWidget(btn_servis_girisi)
         is_tanim_layout.addWidget(self.renkli_buton("AÇIK SERVİSLER", 'fa5s.check', 'green'))
         is_tanim_layout.addWidget(self.renkli_buton("KAPALI SERVİSLER", 'fa5s.clipboard-check', 'blue'))
         is_tanim_layout.addWidget(self.renkli_buton("RANDEVU", 'fa5s.calendar', 'red'))
@@ -153,6 +156,11 @@ class Dashboard(QWidget):
     def cari_listesi_ac(self):
         self.cari_list_form = CariListForm()
         self.cari_list_form.show()
+
+    def servis_girisi_ekle_ac(self):
+        self.servis_form = ServisForm(self)
+        self.hide()
+        self.servis_form.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
