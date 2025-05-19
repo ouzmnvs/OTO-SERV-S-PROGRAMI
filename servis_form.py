@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
+from cari_select_list import CariSelectListForm  # CariSelectListForm'u içe aktarın
 
 class ServisForm(QWidget):
     def __init__(self, dashboard_ref=None):
@@ -99,12 +100,13 @@ class ServisForm(QWidget):
         bilgi_layout.addWidget(self._label("Cari Tipi *", label_style), 3, 0)
         self.cari_tipi = QComboBox()
         self.cari_tipi.setStyleSheet(input_style)
-        self.cari_tipi.addItems(["", "Müşteri", "Tedarikçi"])
+        self.cari_tipi.addItems(["", "Bireysel","Kurumsal"])
         bilgi_layout.addWidget(self.cari_tipi, 3, 1)
 
         sec_btn = QPushButton(icon('fa5s.user-check', color='black'), "Seç")
         sec_btn.setMinimumHeight(36)
         sec_btn.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
+        sec_btn.clicked.connect(self.open_cari_select_list)  # "Seç" butonuna metodu bağlayın
         bilgi_layout.addWidget(sec_btn, 3, 2)
 
         bilgi_layout.addWidget(self._label("Plaka *", label_style), 4, 0)
@@ -307,6 +309,18 @@ class ServisForm(QWidget):
 
         ana_layout.addLayout(sag_panel, 4)
         self.setLayout(ana_layout)
+
+    def open_cari_select_list(self):
+        """Cari seçme penceresini açar."""
+        self.cari_select_form = CariSelectListForm(parent_form=self)
+        self.cari_select_form.show()
+
+    def set_cari_bilgileri(self, cari_kodu, cari_unvani, telefon, cari_tipi):
+        """Cari bilgilerini doldurur."""
+        self.cari_kodu.setText(cari_kodu)
+        self.cari_unvan.setText(cari_unvani)
+        self.telefon.setText(telefon)
+        self.cari_tipi.setCurrentText(cari_tipi)
 
     def _label(self, text, style):
         lbl = QLabel(text)

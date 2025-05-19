@@ -5,17 +5,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from database_progress import load_cari_list  # Veritabanı fonksiyonunu içe aktar
-
-class CariSelectListForm(QWidget):
+from database_progress import load_car_list  # Veritabanı fonksiyonunu içe aktar
+from servis_form import ServisForm  # Burada içe aktar
+from add_car import AddCarForm  # Burada içe aktar
+class CarSelectListForm(QWidget):
     def __init__(self, parent_form=None):
         super().__init__()
-        self.parent_form = parent_form  # AddCarForm veya ServisForm referansı
-        self.setWindowTitle("Cari Listesi")
+        self.parent_form = parent_form  # Parent form referansı
+        self.setWindowTitle("Araç Listesi")
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
-        genislik = int(ekran.width() * 0.40)
-        yukseklik = int(ekran.height() * 0.60)
+        genislik = int(ekran.width() * 0.28)
+        yukseklik = int(ekran.height() * 0.55)
         self.setFixedSize(genislik, yukseklik)
         x = (ekran.width() - genislik) // 2
         y = (ekran.height() - yukseklik) // 2 - 40
@@ -34,32 +35,17 @@ class CariSelectListForm(QWidget):
         btn_aktar = self.stil_buton("Bilgileri Aktar", 'fa5s.mouse-pointer', '#1976d2')
         btn_aktar.clicked.connect(self.bilgileri_aktar)
         btn_iptal = self.stil_buton("İptal", 'fa5s.times', '#b71c1c')
+        btn_iptal.clicked.connect(self.close)
         btn_yeni = self.stil_buton("Yeni Ekle", 'fa5s.plus-circle', '#43a047')
         buton_layout.addWidget(btn_aktar)
         buton_layout.addWidget(btn_iptal)
         buton_layout.addWidget(btn_yeni)
         ana_layout.addLayout(buton_layout)
 
-        # Filtre alanı
-        filtre_layout = QHBoxLayout()
-        filtre_layout.setSpacing(8)
-        self.filtre_input = QLineEdit()
-        self.filtre_input.setPlaceholderText("Cari Adı / Ünvanı")
-        self.filtre_input.setMinimumHeight(32)
-        self.filtre_input.setStyleSheet("""
-            font-size: 16px;
-            border: 1.5px solid #bbb;
-            border-radius: 6px;
-            padding: 6px 12px;
-            background: #fffbe8;
-        """)
-        filtre_layout.addWidget(self.filtre_input)
-        ana_layout.addLayout(filtre_layout)
-
         # Tablo
-        self.table = QTableWidget(0, 4)  # 4 sütun: Cari Kodu, Cari Ünvanı, Telefon, Cari Tipi
+        self.table = QTableWidget(0, 5)  # Satır sayısını 0 olarak başlat
         self.table.setHorizontalHeaderLabels([
-            "Cari Kodu", "Cari Adı / Ünvanı", "Telefon", "Cari Tipi"
+            "Araç Plakası", "Araç Tipi", "Model Yılı", "Marka", "Model"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -88,13 +74,14 @@ class CariSelectListForm(QWidget):
 
     def load_data_to_table(self):
         """Veritabanından gelen verileri tabloya yükler."""
-        cariler = load_cari_list()  # Veritabanından verileri al
-        self.table.setRowCount(len(cariler))  # Satır sayısını ayarla
-        for row, (id, cari_kodu, cari_unvani, telefon, cari_tipi, borc) in enumerate(cariler):
-            self.table.setItem(row, 0, QTableWidgetItem(cari_kodu))
-            self.table.setItem(row, 1, QTableWidgetItem(cari_unvani))
-            self.table.setItem(row, 2, QTableWidgetItem(telefon))
-            self.table.setItem(row, 3, QTableWidgetItem(cari_tipi))
+        araclar = load_car_list()  # Veritabanından verileri al
+        self.table.setRowCount(len(araclar))  # Satır sayısını ayarla
+        for row, (cari_kodu, cari_unvan, plaka, arac_tipi, model_yili, marka, model) in enumerate(araclar):
+            self.table.setItem(row, 0, QTableWidgetItem(plaka))
+            self.table.setItem(row, 1, QTableWidgetItem(arac_tipi))
+            self.table.setItem(row, 2, QTableWidgetItem(str(model_yili)))
+            self.table.setItem(row, 3, QTableWidgetItem(marka))
+            self.table.setItem(row, 4, QTableWidgetItem(model))
 
     def stil_buton(self, text, icon_name, color):
         btn = QPushButton(icon(icon_name, color=color), text)
@@ -119,18 +106,18 @@ class CariSelectListForm(QWidget):
     def bilgileri_aktar(self):
         secili_satir = self.table.currentRow()
         if secili_satir >= 0 and self.parent_form:
-            cari_kodu = self.table.item(secili_satir, 0).text()
-            cari_unvani = self.table.item(secili_satir, 1).text()
-            telefon = self.table.item(secili_satir, 2).text()
-            cari_tipi = self.table.item(secili_satir, 3).text()
-
-            # Parent formun türüne göre bilgileri aktar
-            if hasattr(self.parent_form, 'set_cari_bilgileri'):
-                self.parent_form.set_cari_bilgileri(cari_kodu, cari_unvani, telefon, cari_tipi)
+            plaka = self.table.item(secili_satir, 0).text()
+            arac_tipi = self.table.item(secili_satir, 1).text()
+            model_yili = self.table.item(secili_satir, 2).text()
+            marka = self.table.item(secili_satir, 3).text()
+            model = self.table.item(secili_satir, 4).text()
+            # Parent formda bir set_arac_bilgileri metodu varsa çağır
+            if hasattr(self.parent_form, 'set_arac_bilgileri'):
+                self.parent_form.set_arac_bilgileri(plaka, arac_tipi, model_yili, marka, model)
             self.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    form = CariSelectListForm()
+    form = CarSelectListForm()
     form.show()
     sys.exit(app.exec_())

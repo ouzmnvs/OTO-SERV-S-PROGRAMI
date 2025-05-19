@@ -228,7 +228,7 @@ class AddCarForm(QWidget):
         self.cari_select_form = CariSelectListForm(parent_form=self)
         self.cari_select_form.show()
 
-    def set_cari_bilgileri(self, cari_kodu, cari_unvani):
+    def set_cari_bilgileri(self, cari_kodu, cari_unvani, telefon=None, cari_tipi=None):
         self.cari_kodu.setText(cari_kodu)
         self.cari_unvani.setText(cari_unvani)
 
