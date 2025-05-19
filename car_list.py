@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
+from database_progress import load_car_list
 
 class CarListForm(QWidget):
     def __init__(self, dashboard_ref=None):
@@ -72,7 +73,8 @@ class CarListForm(QWidget):
         ana_layout.addLayout(filtre_layout)
 
         # Tablo
-        self.table = QTableWidget(4, 7)
+        self.table = QTableWidget()
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "Cari Kodu", "Cari Adı / Ünvanı", "Araç Plakası", "Araç Tipi", "Model Yılı", "Marka", "Model"
         ])
@@ -95,25 +97,27 @@ class CarListForm(QWidget):
             }
         """)
 
-        # Örnek veriler
-        veriler = [
-            ["TD002", "AHMET CANDAN", "02 BB 002", "Otomobil", "2022", "OPEL", ""],
-            ["TD002", "AHMET CANDAN", "01 AA 003", "Otomobil", "2020", "OPEL", ""],
-            ["CR001", "FATİH ÖZ", "06 AA 001", "Otomobil", "2023", "MERCEDES", "C 180 d"],
-            ["CR002", "MUSTAFA CAN", "34 AA 001", "Arazi, SUV & Pikap", "2014", "AUDI", "A7"]
-        ]
-        for row, veri in enumerate(veriler):
-            for col, deger in enumerate(veri):
-                self.table.setItem(row, col, QTableWidgetItem(deger))
+        # Veritabanından verileri yükle
+        self.load_data_to_table()
 
         ana_layout.addWidget(self.table)
 
         # Alt bilgi
-        alt_bilgi = QLabel("4 adet kayıt listeleniyor")
-        alt_bilgi.setStyleSheet("font-size: 14px; color: #444; padding: 6px 0 0 8px;")
-        ana_layout.addWidget(alt_bilgi)
+        self.alt_bilgi = QLabel("")
+        self.alt_bilgi.setStyleSheet("font-size: 14px; color: #444; padding: 6px 0 0 8px;")
+        ana_layout.addWidget(self.alt_bilgi)
 
         self.setLayout(ana_layout)
+
+    def load_data_to_table(self):
+        # Veritabanından verileri çek
+        data = load_car_list()
+        self.table.setRowCount(len(data))
+        for row, record in enumerate(data):
+            for col, value in enumerate(record):  # İlk sütun hariç
+                print(f"{col}: {value}")
+                self.table.setItem(row, col, QTableWidgetItem(str(value)))
+        # self.alt_bilgi.setText(f"{len(data)} adet kayıt listeleniyor")
 
     def stil_buton(self, text, icon_name, color):
         btn = QPushButton(icon(icon_name, color=color), text)
