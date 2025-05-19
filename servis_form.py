@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from cari_select_list import CariSelectListForm  # CariSelectListForm'u içe aktarın
+from car_select_list import CarSelectListForm  # CarSelectListForm'u içe aktarın
 
 class ServisForm(QWidget):
     def __init__(self, dashboard_ref=None):
@@ -138,6 +139,7 @@ class ServisForm(QWidget):
         arac_sec_btn = QPushButton(icon('fa5s.car', color='blue'), "Seç")
         arac_sec_btn.setMinimumHeight(36)
         arac_sec_btn.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
+        arac_sec_btn.clicked.connect(self.open_car_select_list)  # "Seç" butonuna metodu bağlayın
         bilgi_layout.addWidget(arac_sec_btn, 8, 2)
 
         bilgi_group.setLayout(bilgi_layout)
@@ -315,12 +317,25 @@ class ServisForm(QWidget):
         self.cari_select_form = CariSelectListForm(parent_form=self)
         self.cari_select_form.show()
 
+    def open_car_select_list(self):
+        """Araç seçme penceresini açar."""
+        self.car_select_form = CarSelectListForm(parent_form=self)
+        self.car_select_form.show()
+
     def set_cari_bilgileri(self, cari_kodu, cari_unvani, telefon, cari_tipi):
         """Cari bilgilerini doldurur."""
         self.cari_kodu.setText(cari_kodu)
         self.cari_unvan.setText(cari_unvani)
         self.telefon.setText(telefon)
         self.cari_tipi.setCurrentText(cari_tipi)
+
+    def set_arac_bilgileri(self, plaka, arac_tipi, model_yili, marka, model):
+        """Araç bilgilerini doldurur."""
+        self.plaka.setText(plaka)
+        self.arac_tipi.setCurrentText(arac_tipi)
+        self.model_yili.setText(model_yili)
+        self.marka.setText(marka)
+        self.model.setText(model)
 
     def _label(self, text, style):
         lbl = QLabel(text)

@@ -5,9 +5,9 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from database_progress import load_car_list  # Veritabanı fonksiyonunu içe aktar
-from servis_form import ServisForm  # Burada içe aktar
-from add_car import AddCarForm  # Burada içe aktar
+from database_progress import load_car_list  
+# from servis_form import ServisForm  
+# from add_car import AddCarForm  
 class CarSelectListForm(QWidget):
     def __init__(self, parent_form=None):
         super().__init__()
