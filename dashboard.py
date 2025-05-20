@@ -11,6 +11,9 @@ from add_cari import AddCariForm  # <-- Bunu da ekle
 from car_list import CarListForm  # En üste ekle
 from cari_list import CariListForm  # En üste ekleyin
 from servis_form import ServisForm  # En üste ekleyin
+from open_service import OpenServiceForm  # OpenServiceForm sınıfını içe aktarın
+from close_service import CloseServiceForm  # CloseServiceForm sınıfını içe aktarın
+from payment_history import PaymentHistoryForm  # PaymentHistoryForm sınıfını içe aktarın
 
 class Dashboard(QWidget):
     def __init__(self):
@@ -103,7 +106,12 @@ class Dashboard(QWidget):
         btn_cari_listesi = self.renkli_buton("CARİ LİSTESİ", 'fa5s.users', 'purple')
         btn_cari_listesi.clicked.connect(self.cari_listesi_ac)
         tanimlamalar_layout.addWidget(btn_cari_listesi)
-        tanimlamalar_layout.addWidget(self.renkli_buton("ÖDEME GEÇMİŞİ", 'fa5s.money-bill', 'teal'))
+
+        # Ödeme Geçmişi Butonu
+        btn_odeme_gecmisi = self.renkli_buton("ÖDEME GEÇMİŞİ", 'fa5s.money-bill', 'teal')
+        btn_odeme_gecmisi.clicked.connect(self.open_payment_history_form)  # Butona işlev bağlayın
+        tanimlamalar_layout.addWidget(btn_odeme_gecmisi)
+
         ana_layout.addWidget(self.bolum_kutusu(tanimlamalar_layout))
 
         # İŞ TANIM VE SORGULAMA
@@ -113,8 +121,15 @@ class Dashboard(QWidget):
         btn_servis_girisi = self.renkli_buton("SERVİS GİRİŞİ EKLE", 'fa5s.tools', 'brown')
         btn_servis_girisi.clicked.connect(self.servis_girisi_ekle_ac)
         is_tanim_layout.addWidget(btn_servis_girisi)
-        is_tanim_layout.addWidget(self.renkli_buton("AÇIK SERVİSLER", 'fa5s.check', 'green'))
-        is_tanim_layout.addWidget(self.renkli_buton("KAPALI SERVİSLER", 'fa5s.clipboard-check', 'blue'))
+        btn_acik_servisler = self.renkli_buton("AÇIK SERVİSLER", 'fa5s.check', 'green')
+        btn_acik_servisler.clicked.connect(self.open_open_service_form)  # Butona işlev bağlayın
+        is_tanim_layout.addWidget(btn_acik_servisler)
+
+        # Kapalı Servisler Butonu
+        btn_kapali_servisler = self.renkli_buton("KAPALI SERVİSLER", 'fa5s.clipboard-check', 'blue')
+        btn_kapali_servisler.clicked.connect(self.open_close_service_form)  # Butona işlev bağlayın
+        is_tanim_layout.addWidget(btn_kapali_servisler)
+
         is_tanim_layout.addWidget(self.renkli_buton("RANDEVU", 'fa5s.calendar', 'red'))
         is_tanim_layout.addWidget(self.renkli_buton("ARAÇ GEÇMİŞİ", 'fa5s.history', 'gray'))
         ana_layout.addWidget(self.bolum_kutusu(is_tanim_layout))
@@ -161,6 +176,21 @@ class Dashboard(QWidget):
         self.servis_form = ServisForm(self)
         self.hide()
         self.servis_form.show()
+
+    def open_open_service_form(self):
+        """Açık Servisler penceresini açar."""
+        self.open_service_form = OpenServiceForm()
+        self.open_service_form.show()
+
+    def open_close_service_form(self):
+        """Kapalı Servisler penceresini açar."""
+        self.close_service_form = CloseServiceForm()
+        self.close_service_form.show()
+
+    def open_payment_history_form(self):
+        """Ödeme Geçmişi penceresini açar."""
+        self.payment_history_form = PaymentHistoryForm()
+        self.payment_history_form.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

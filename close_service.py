@@ -288,6 +288,23 @@ class CloseServiceForm(QWidget):
         """)
         return btn
 
+class OpenServiceForm(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Açık Servisler")
+        self.setGeometry(100, 100, 600, 400)  # Pencere boyutlarını ayarlayın
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Örnek bir içerik
+        lbl = QLabel("Açık Servisler Listesi")
+        lbl.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(lbl)
+
+        self.setLayout(layout)
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     form = CloseServiceForm()
