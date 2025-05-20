@@ -33,6 +33,27 @@ def add_arac(cari_kodu, plaka, arac_tipi, model_yili, marka, model):
     finally:
         conn.close()
 
+def add_islem(cari_kodu, plaka, islem_aciklama, islem_tutari, kdv_orani, aciklama):
+    """İŞLEMLER tablosuna yeni bir işlem ekler."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        
+        # İşlem ekleme sorgusu
+        cursor.execute("""
+        INSERT INTO İŞLEMLER (cari_kodu, plaka, islem_aciklama, islem_tutari, kdv_orani, aciklama)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """, (cari_kodu, plaka, islem_aciklama, islem_tutari, kdv_orani, aciklama))
+        
+        conn.commit()
+        print("İşlem başarıyla eklendi.")
+    except sqlite3.IntegrityError as e:
+        print(f"Veritabanı hatası: {e}")
+    except sqlite3.Error as e:
+        print(f"Bir hata oluştu: {e}")
+    finally:
+        conn.close()
 
 def load_car_list():
     import sqlite3

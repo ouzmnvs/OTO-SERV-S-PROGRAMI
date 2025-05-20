@@ -7,6 +7,7 @@ from qtawesome import icon
 import sys
 from cari_select_list import CariSelectListForm  # CariSelectListForm'u içe aktarın
 from car_select_list import CarSelectListForm  # CarSelectListForm'u içe aktarın
+from database_progress import add_islem  # İşlem ekleme fonksiyonunu içe aktarın
 
 class ServisForm(QWidget):
     def __init__(self, dashboard_ref=None):
@@ -230,22 +231,24 @@ class ServisForm(QWidget):
         self.islem_ek_aciklama.setStyleSheet(input_style)
         islem_layout.addWidget(self.islem_ek_aciklama, 0, 5)
 
+        islem_layout.addWidget(self._label("KDV Oranı (%)", label_style), 0, 6)
+        self.kdv_orani = QLineEdit()
+        self.kdv_orani.setStyleSheet(input_style)
+        self.kdv_orani.setPlaceholderText("20")  # Varsayılan KDV oranı
+        islem_layout.addWidget(self.kdv_orani, 0, 7)
+
         btn_islem_ekle = QPushButton(icon('fa5s.plus-circle', color='green'), "Ekle")
         btn_islem_ekle.setMinimumHeight(36)
         btn_islem_ekle.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
-        islem_layout.addWidget(btn_islem_ekle, 0, 6)
-
-        btn_islem_temizle = QPushButton(icon('fa5s.sync', color='#fbc02d'), "")
-        btn_islem_temizle.setMinimumHeight(36)
-        btn_islem_temizle.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
-        islem_layout.addWidget(btn_islem_temizle, 0, 7)
+        btn_islem_ekle.clicked.connect(self.islem_ekle)  # İşlem ekleme işlevini bağlayın
+        islem_layout.addWidget(btn_islem_ekle, 0, 8)  # "Ekle" butonunu en sağa taşı
 
         islem_group.setLayout(islem_layout)
         sag_panel.addWidget(islem_group)
 
         # İşlem Listesi Tablosu
-        self.islem_table = QTableWidget(0, 3)
-        self.islem_table.setHorizontalHeaderLabels(["İşlem Açıklaması", "Tutar", "Açıklama"])
+        self.islem_table = QTableWidget(0, 4)  # Sütun sayısını 4'e çıkarıyoruz
+        self.islem_table.setHorizontalHeaderLabels(["İşlem Açıklaması", "Tutar", "KDV Oranı", "Açıklama"])  # "KDV Oranı" eklendi
         self.islem_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.islem_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.islem_table.setAlternatingRowColors(True)
@@ -366,6 +369,64 @@ class ServisForm(QWidget):
         self.close()
         if self.dashboard_ref:
             self.dashboard_ref.show()
+
+    def islem_ekle(self):
+        """İşlem bilgilerini tabloya ve veritabanına ekler."""
+        # Formdaki bilgileri al
+        cari_kodu = self.cari_kodu.text().strip()
+        plaka = self.plaka.text().strip()
+        islem_aciklama = self.islem_aciklama.text().strip()
+        islem_tutari = self.islem_tutar.text().strip()
+        kdv_orani = self.kdv_orani.text().strip() or "20"  # Varsayılan KDV oranı
+        aciklama = self.islem_ek_aciklama.text().strip()
+
+        # Gerekli alanların doldurulup doldurulmadığını kontrol et
+        if not cari_kodu or not plaka or not islem_aciklama or not islem_tutari:
+            print("Lütfen gerekli alanları doldurun!")
+            return
+
+        try:
+            # KDV oranını float'a dönüştür
+            kdv_orani = float(kdv_orani)
+
+            # İşlemi veritabanına ekle
+            add_islem(cari_kodu, plaka, islem_aciklama, float(islem_tutari), kdv_orani, aciklama)
+
+            # İşlemi tabloya ekle
+            row_count = self.islem_table.rowCount()
+            self.islem_table.insertRow(row_count)
+            self.islem_table.setItem(row_count, 0, QTableWidgetItem(islem_aciklama))
+            self.islem_table.setItem(row_count, 1, QTableWidgetItem(islem_tutari))
+            self.islem_table.setItem(row_count, 2, QTableWidgetItem(str(kdv_orani)))  # KDV Oranı sütununa ekleme
+            self.islem_table.setItem(row_count, 3, QTableWidgetItem(aciklama))
+
+            # İşlem özetini güncelle
+            self.guncelle_islem_ozeti()
+
+            # Formu temizle
+            self.islem_aciklama.clear()
+            self.islem_tutar.clear()
+            self.kdv_orani.clear()
+            self.islem_ek_aciklama.clear()
+
+            print("İşlem başarıyla eklendi.")
+        except ValueError:
+            print("KDV Oranı geçerli bir sayı olmalıdır!")
+        except Exception as e:
+            print(f"Bir hata oluştu: {e}")
+
+    def guncelle_islem_ozeti(self):
+        """İşlem özetini günceller."""
+        toplam_tutar = 0
+        toplam_islem = self.islem_table.rowCount()
+
+        for row in range(toplam_islem):
+            tutar_item = self.islem_table.item(row, 1)
+            if tutar_item:
+                toplam_tutar += float(tutar_item.text())
+
+        self.lbl_islem_sayisi.setText(f"Toplam İşlem Sayısı\n{toplam_islem}")
+        self.lbl_islem_tutar.setText(f"Toplam İşlem Tutarı\n{toplam_tutar:.2f}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

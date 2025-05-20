@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS CARİ (
 )
 """)
 
-# ARAÇLAR tablosunu oluştur veya güncelle
+# ARAÇLAR tablosunu oluştur
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS ARAÇLAR (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,9 +30,24 @@ CREATE TABLE IF NOT EXISTS ARAÇLAR (
     sasi_no TEXT,
     ruhsat_sahibi_adi TEXT,
     arac_tipi TEXT,
-    yakit_cinsi TEXT,  -- Benzin, Dizel, LPG, Benzin-LPG
-    ruhsat_fotografi BLOB,  -- Fotoğraf binary olarak saklanacak
+    yakit_cinsi TEXT,
+    ruhsat_fotografi BLOB,
     FOREIGN KEY (cari_kodu) REFERENCES CARİ (cari_kodu) ON DELETE CASCADE
+)
+""")
+
+# İŞLEMLER tablosunu oluştur
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS İŞLEMLER (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cari_kodu TEXT NOT NULL,
+    plaka TEXT NOT NULL,
+    islem_aciklama TEXT NOT NULL,
+    islem_tutari REAL NOT NULL,
+    kdv_orani REAL NOT NULL,
+    aciklama TEXT,
+    FOREIGN KEY (cari_kodu) REFERENCES CARİ (cari_kodu) ON DELETE CASCADE,
+    FOREIGN KEY (plaka) REFERENCES ARAÇLAR (plaka) ON DELETE CASCADE
 )
 """)
 
