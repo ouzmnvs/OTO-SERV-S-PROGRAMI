@@ -7,8 +7,8 @@ from qtawesome import icon
 import sys
 from cari_select_list import CariSelectListForm  # CariSelectListForm'u içe aktarın
 from car_select_list import CarSelectListForm  # CarSelectListForm'u içe aktarın
-from database_progress import add_islem  # İşlem ekleme fonksiyonunu içe aktarın
-
+from database_progress import add_servis, add_islem  # Servis ekleme fonksiyonunu içe aktarın
+from datetime import datetime
 class ServisForm(QWidget):
     def __init__(self, dashboard_ref=None):
         super().__init__()
@@ -296,6 +296,7 @@ class ServisForm(QWidget):
 
         # Alt Butonlar
         btn_emri_olustur = self._buton("EMRİ OLUŞTUR", 'fa5s.save', 'deepskyblue')
+        btn_emri_olustur.clicked.connect(self.emri_olustur)  # <-- Ekle
         btn_islemleri_temizle = self._buton("İŞLEMLERİ TEMİZLE", 'fa5s.sync', '#fbc02d')
         btn_pdf_aktar = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
         btn_sayfa_kapat = self._buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
@@ -371,26 +372,21 @@ class ServisForm(QWidget):
             self.dashboard_ref.show()
 
     def islem_ekle(self):
-        """İşlem bilgilerini tabloya ve veritabanına ekler."""
+        """İşlem bilgilerini tabloya ekler."""
         # Formdaki bilgileri al
-        cari_kodu = self.cari_kodu.text().strip()
-        plaka = self.plaka.text().strip()
         islem_aciklama = self.islem_aciklama.text().strip()
         islem_tutari = self.islem_tutar.text().strip()
         kdv_orani = self.kdv_orani.text().strip() or "20"  # Varsayılan KDV oranı
         aciklama = self.islem_ek_aciklama.text().strip()
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
-        if not cari_kodu or not plaka or not islem_aciklama or not islem_tutari:
+        if not islem_aciklama or not islem_tutari:
             print("Lütfen gerekli alanları doldurun!")
             return
 
         try:
             # KDV oranını float'a dönüştür
             kdv_orani = float(kdv_orani)
-
-            # İşlemi veritabanına ekle
-            add_islem(cari_kodu, plaka, islem_aciklama, float(islem_tutari), kdv_orani, aciklama)
 
             # İşlemi tabloya ekle
             row_count = self.islem_table.rowCount()
@@ -409,7 +405,7 @@ class ServisForm(QWidget):
             self.kdv_orani.clear()
             self.islem_ek_aciklama.clear()
 
-            print("İşlem başarıyla eklendi.")
+            print("İşlem tabloya başarıyla eklendi.")
         except ValueError:
             print("KDV Oranı geçerli bir sayı olmalıdır!")
         except Exception as e:
@@ -427,6 +423,55 @@ class ServisForm(QWidget):
 
         self.lbl_islem_sayisi.setText(f"Toplam İşlem Sayısı\n{toplam_islem}")
         self.lbl_islem_tutar.setText(f"Toplam İşlem Tutarı\n{toplam_tutar:.2f}")
+
+    def emri_olustur(self):
+        """Cari ve araç bilgileriyle servis oluşturur ve işlemleri bu servise bağlar."""
+        cari_kodu = self.cari_kodu.text().strip()
+        plaka = self.plaka.text().strip()
+        servis_tarihi = datetime.now().strftime("%d.%m.%Y")  # O anki tarihi al
+        aciklama = "Servis oluşturuldu."  # Servis açıklaması
+
+        # Gerekli alanların doldurulup doldurulmadığını kontrol et
+        if not cari_kodu or not plaka:
+            print("Lütfen cari kodu ve plaka bilgilerini doldurun!")
+            return
+
+        # İşlem tablosunun boş olup olmadığını kontrol et
+        toplam_islem = self.islem_table.rowCount()
+        if toplam_islem == 0:
+            print("Lütfen en az bir işlem ekleyin!")
+            return
+
+        # Servis kaydı oluştur
+        servis_id = add_servis(cari_kodu, plaka, servis_tarihi, aciklama)
+        if not servis_id:
+            print("Servis oluşturulamadı!")
+            return
+
+        # İşlemleri servise bağla
+        for row in range(toplam_islem):
+            islem_aciklama = self.islem_table.item(row, 0).text()
+            islem_tutari = float(self.islem_table.item(row, 1).text())
+            kdv_orani = float(self.islem_table.item(row, 2).text())
+            islem_aciklama_detay = self.islem_table.item(row, 3).text()
+
+            # İşlemi veritabanına ekle
+            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, islem_aciklama_detay)
+
+        print("Servis ve işlemler başarıyla kaydedildi.")
+
+        # Formu temizle
+        self.islem_table.setRowCount(0)
+        self.guncelle_islem_ozeti()
+        self.cari_kodu.clear()
+        self.plaka.clear()
+        self.cari_unvan.clear()
+        self.telefon.clear()
+        self.cari_tipi.setCurrentIndex(0)
+        self.arac_tipi.setCurrentIndex(0)
+        self.model_yili.clear()
+        self.marka.clear()
+        self.model.clear()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

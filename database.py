@@ -40,12 +40,24 @@ CREATE TABLE IF NOT EXISTS ARAÇLAR (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS İŞLEMLER (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cari_kodu TEXT NOT NULL,
-    plaka TEXT NOT NULL,
+    servis_id INTEGER NOT NULL,
     islem_aciklama TEXT NOT NULL,
     islem_tutari REAL NOT NULL,
     kdv_orani REAL NOT NULL,
     aciklama TEXT,
+    FOREIGN KEY (servis_id) REFERENCES SERVİSLER (id) ON DELETE CASCADE
+)
+""")
+
+# SERVİSLER tablosunu oluştur
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS SERVİSLER (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cari_kodu TEXT NOT NULL,
+    plaka TEXT NOT NULL,
+    servis_tarihi TEXT NOT NULL,
+    aciklama TEXT,
+    servis_durumu TEXT DEFAULT 'Açık',  -- Varsayılan değer "Açık"
     FOREIGN KEY (cari_kodu) REFERENCES CARİ (cari_kodu) ON DELETE CASCADE,
     FOREIGN KEY (plaka) REFERENCES ARAÇLAR (plaka) ON DELETE CASCADE
 )

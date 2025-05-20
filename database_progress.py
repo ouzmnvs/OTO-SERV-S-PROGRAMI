@@ -33,7 +33,7 @@ def add_arac(cari_kodu, plaka, arac_tipi, model_yili, marka, model):
     finally:
         conn.close()
 
-def add_islem(cari_kodu, plaka, islem_aciklama, islem_tutari, kdv_orani, aciklama):
+def add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama):
     """İŞLEMLER tablosuna yeni bir işlem ekler."""
     import sqlite3
     try:
@@ -42,16 +42,37 @@ def add_islem(cari_kodu, plaka, islem_aciklama, islem_tutari, kdv_orani, aciklam
         
         # İşlem ekleme sorgusu
         cursor.execute("""
-        INSERT INTO İŞLEMLER (cari_kodu, plaka, islem_aciklama, islem_tutari, kdv_orani, aciklama)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (cari_kodu, plaka, islem_aciklama, islem_tutari, kdv_orani, aciklama))
+        INSERT INTO İŞLEMLER (servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama)
+        VALUES (?, ?, ?, ?, ?)
+        """, (servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama))
         
         conn.commit()
         print("İşlem başarıyla eklendi.")
-    except sqlite3.IntegrityError as e:
-        print(f"Veritabanı hatası: {e}")
     except sqlite3.Error as e:
         print(f"Bir hata oluştu: {e}")
+    finally:
+        conn.close()
+
+def add_servis(cari_kodu, plaka, servis_tarihi, aciklama):
+    """SERVİSLER tablosuna yeni bir servis ekler ve servis ID'sini döndürür."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        
+        # Servis ekleme sorgusu
+        cursor.execute("""
+        INSERT INTO SERVİSLER (cari_kodu, plaka, servis_tarihi, aciklama, servis_durumu)
+        VALUES (?, ?, ?, ?, 'Açık')
+        """, (cari_kodu, plaka, servis_tarihi, aciklama))
+        
+        conn.commit()
+        servis_id = cursor.lastrowid  # Eklenen servisin ID'sini al
+        print("Servis başarıyla eklendi.")
+        return servis_id
+    except sqlite3.Error as e:
+        print(f"Bir hata oluştu: {e}")
+        return None
     finally:
         conn.close()
 
