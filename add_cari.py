@@ -11,11 +11,10 @@ class AddCariForm(QWidget):
         super().__init__()
         self.dashboard_ref = dashboard_ref
         self.setWindowTitle("Cari Formu")
-        # Dashboard %85 ekran kaplıyor, bu form ise yaklaşık %32 genişlik ve %35 yükseklik olsun
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
         genislik = int(ekran.width() * 0.32)
-        yukseklik = int(ekran.height() * 0.35)
+        yukseklik = int(ekran.height() * 0.50)
         self.setFixedSize(genislik, yukseklik)
         self.init_ui()
 
@@ -62,6 +61,7 @@ class AddCariForm(QWidget):
         cari_layout.setVerticalSpacing(16)
         cari_layout.setHorizontalSpacing(10)
 
+        # Cari Kodu
         lbl_cari_kodu = QLabel("Cari Kodu")
         lbl_cari_kodu.setStyleSheet(label_style)
         cari_layout.addWidget(lbl_cari_kodu, 0, 0)
@@ -70,6 +70,7 @@ class AddCariForm(QWidget):
         self.cari_kodu.setMinimumHeight(36)
         cari_layout.addWidget(self.cari_kodu, 0, 1, 1, 2)
 
+        # Cari Adı / Ünvanı
         lbl_cari_unvan = QLabel("Cari Adı / Ünvanı")
         lbl_cari_unvan.setStyleSheet(label_style)
         cari_layout.addWidget(lbl_cari_unvan, 1, 0)
@@ -78,22 +79,42 @@ class AddCariForm(QWidget):
         self.cari_unvan.setMinimumHeight(36)
         cari_layout.addWidget(self.cari_unvan, 1, 1, 1, 2)
 
-        lbl_telefon = QLabel("Telefon")
-        lbl_telefon.setStyleSheet(label_style)
-        cari_layout.addWidget(lbl_telefon, 2, 0)
-        self.telefon = QLineEdit()
-        self.telefon.setStyleSheet(input_style)
-        self.telefon.setMinimumHeight(36)
-        cari_layout.addWidget(self.telefon, 2, 1, 1, 2)
+        # TC Kimlik No
+        lbl_tc_kimlik_no = QLabel("TC Kimlik No")
+        lbl_tc_kimlik_no.setStyleSheet(label_style)
+        cari_layout.addWidget(lbl_tc_kimlik_no, 2, 0)
+        self.tc_kimlik_no = QLineEdit()
+        self.tc_kimlik_no.setStyleSheet(input_style)
+        self.tc_kimlik_no.setMinimumHeight(36)
+        cari_layout.addWidget(self.tc_kimlik_no, 2, 1, 1, 2)
 
+        # Vergi No
+        lbl_vergi_no = QLabel("Vergi No")
+        lbl_vergi_no.setStyleSheet(label_style)
+        cari_layout.addWidget(lbl_vergi_no, 3, 0)
+        self.vergi_no = QLineEdit()
+        self.vergi_no.setStyleSheet(input_style)
+        self.vergi_no.setMinimumHeight(36)
+        cari_layout.addWidget(self.vergi_no, 3, 1, 1, 2)
+
+        # Cep Telefonu
+        lbl_cep_telefonu = QLabel("Cep Telefonu")
+        lbl_cep_telefonu.setStyleSheet(label_style)
+        cari_layout.addWidget(lbl_cep_telefonu, 4, 0)
+        self.cep_telefonu = QLineEdit()
+        self.cep_telefonu.setStyleSheet(input_style)
+        self.cep_telefonu.setMinimumHeight(36)
+        cari_layout.addWidget(self.cep_telefonu, 4, 1, 1, 2)
+
+        # Cari Tipi
         lbl_cari_tipi = QLabel("Cari Tipi *")
         lbl_cari_tipi.setStyleSheet(label_style)
-        cari_layout.addWidget(lbl_cari_tipi, 3, 0)
+        cari_layout.addWidget(lbl_cari_tipi, 5, 0)
         self.cari_tipi = QComboBox()
         self.cari_tipi.setStyleSheet(input_style)
         self.cari_tipi.setMinimumHeight(36)
         self.cari_tipi.addItems(["Bireysel", "Kurumsal", "Diğer"])
-        cari_layout.addWidget(self.cari_tipi, 3, 1, 1, 2)
+        cari_layout.addWidget(self.cari_tipi, 5, 1, 1, 2)
 
         cari_group.setLayout(cari_layout)
 
@@ -103,38 +124,10 @@ class AddCariForm(QWidget):
         kaydet_btn = QPushButton(icon('fa5s.save', color='deeppink'), "Kaydet")
         kaydet_btn.setFixedWidth(140)
         kaydet_btn.setMinimumHeight(44)
-        kaydet_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 18px;
-                font-weight: 800;
-                background: #fff;
-                border: 1.5px solid #bbb;
-                border-radius: 8px;
-                padding: 8px 20px;
-            }
-            QPushButton:hover {
-                background: #ffe4f0;
-                border: 2px solid #e91e63;
-            }
-        """)
         kaydet_btn.clicked.connect(self.kaydet_tiklandi)
         iptal_btn = QPushButton(icon('fa5s.times', color='darkred'), "İptal")
         iptal_btn.setFixedWidth(140)
         iptal_btn.setMinimumHeight(44)
-        iptal_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 18px;
-                font-weight: 800;
-                background: #fff;
-                border: 1.5px solid #bbb;
-                border-radius: 8px;
-                padding: 8px 20px;
-            }
-            QPushButton:hover {
-                background: #ffeaea;
-                border: 2px solid #b71c1c;
-            }
-        """)
         iptal_btn.clicked.connect(self.iptal_tiklandi)
         btn_layout.addWidget(kaydet_btn)
         btn_layout.addWidget(iptal_btn)
@@ -155,7 +148,9 @@ class AddCariForm(QWidget):
         # Formdaki bilgileri al
         cari_kodu = self.cari_kodu.text().strip()
         cari_unvan = self.cari_unvan.text().strip()
-        telefon = self.telefon.text().strip()
+        tc_kimlik_no = self.tc_kimlik_no.text().strip()
+        vergi_no = self.vergi_no.text().strip()
+        cep_telefonu = self.cep_telefonu.text().strip()
         cari_tipi = self.cari_tipi.currentText().strip()
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
@@ -169,9 +164,9 @@ class AddCariForm(QWidget):
             conn = sqlite3.connect("oto_servis.db")
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO CARİ (cari_kodu, cari_ad_unvan, telefon, cari_tipi, borc)
-                VALUES (?, ?, ?, ?, ?)
-            """, (cari_kodu, cari_unvan, telefon,cari_tipi, 0))  # Borç varsayılan olarak 0
+                INSERT INTO CARİ (cari_kodu, cari_ad_unvan, tc_kimlik_no, vergi_no, cep_telefonu, cari_tipi, borc)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (cari_kodu, cari_unvan, tc_kimlik_no, vergi_no, cep_telefonu, cari_tipi, 0))  # Borç varsayılan olarak 0
             conn.commit()
             print("Cari başarıyla eklendi!")
             self.close()  # Formu kapat

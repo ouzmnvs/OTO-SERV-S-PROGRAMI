@@ -1,9 +1,10 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
-    QGroupBox, QComboBox, QGridLayout
+    QGroupBox, QComboBox, QGridLayout, QFileDialog
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
+import sqlite3
 import sys
 from cari_select_list import CariSelectListForm  # En üste ekleyin
 
@@ -11,12 +12,11 @@ class AddCarForm(QWidget):
     def __init__(self, dashboard_ref=None):
         super().__init__()
         self.dashboard_ref = dashboard_ref
-        self.setWindowTitle("Araç Kartı Formu")
-        # Dashboard %85 ekran kaplıyor, bu form ise yaklaşık %40 genişlik ve %50 yükseklik olsun
+        self.setWindowTitle("Araç Ekleme Formu")
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
         genislik = int(ekran.width() * 0.40)
-        yukseklik = int(ekran.height() * 0.50)
+        yukseklik = int(ekran.height() * 0.60)
         self.setFixedSize(genislik, yukseklik)
         self.init_ui()
 
@@ -132,6 +132,43 @@ class AddCarForm(QWidget):
         self.model.setStyleSheet(input_style)
         self.model.setMinimumHeight(36)
         arac_layout.addWidget(self.model, 4, 1, 1, 2)
+
+        # Şasi No
+        lbl_sasi_no = QLabel("Şasi No")
+        lbl_sasi_no.setStyleSheet(label_style)
+        arac_layout.addWidget(lbl_sasi_no, 5, 0)
+        self.sasi_no = QLineEdit()
+        self.sasi_no.setStyleSheet(input_style)
+        self.sasi_no.setMinimumHeight(36)
+        arac_layout.addWidget(self.sasi_no, 5, 1, 1, 2)
+
+        # Ruhsat Sahibi Adı
+        lbl_ruhsat_sahibi = QLabel("Ruhsat Sahibi Adı")
+        lbl_ruhsat_sahibi.setStyleSheet(label_style)
+        arac_layout.addWidget(lbl_ruhsat_sahibi, 6, 0)
+        self.ruhsat_sahibi = QLineEdit()
+        self.ruhsat_sahibi.setStyleSheet(input_style)
+        self.ruhsat_sahibi.setMinimumHeight(36)
+        arac_layout.addWidget(self.ruhsat_sahibi, 6, 1, 1, 2)
+
+        # Yakıt Cinsi
+        lbl_yakit_cinsi = QLabel("Yakıt Cinsi")
+        lbl_yakit_cinsi.setStyleSheet(label_style)
+        arac_layout.addWidget(lbl_yakit_cinsi, 7, 0)
+        self.yakit_cinsi = QComboBox()
+        self.yakit_cinsi.setStyleSheet(input_style)
+        self.yakit_cinsi.addItems(["Benzin", "Dizel", "LPG", "Benzin-LPG"])
+        arac_layout.addWidget(self.yakit_cinsi, 7, 1, 1, 2)
+
+        # Ruhsat Fotoğrafı
+        lbl_ruhsat_foto = QLabel("Ruhsat Fotoğrafı")
+        lbl_ruhsat_foto.setStyleSheet(label_style)
+        arac_layout.addWidget(lbl_ruhsat_foto, 8, 0)
+        self.ruhsat_foto = QPushButton("Fotoğraf Seç")
+        self.ruhsat_foto.setStyleSheet("font-size: 16px; padding: 8px;")
+        self.ruhsat_foto.clicked.connect(self.select_photo)
+        arac_layout.addWidget(self.ruhsat_foto, 8, 1, 1, 2)
+
         arac_group.setLayout(arac_layout)
 
         # Butonlar
@@ -184,6 +221,12 @@ class AddCarForm(QWidget):
 
         self.setLayout(ana_layout)
 
+    def select_photo(self):
+        """Ruhsat fotoğrafını seçmek için bir dosya seçici açar."""
+        file_name, _ = QFileDialog.getOpenFileName(self, "Ruhsat Fotoğrafı Seç", "", "Image Files (*.png *.jpg *.jpeg)")
+        if file_name:
+            print(f"Seçilen fotoğraf: {file_name}")
+
     def iptal_tiklandi(self):
         self.close()
         if self.dashboard_ref:
@@ -197,6 +240,9 @@ class AddCarForm(QWidget):
         model_yili = self.model_yili.text().strip()
         marka = self.marka.text().strip()
         model = self.model.text().strip()
+        sasi_no = self.sasi_no.text().strip()
+        ruhsat_sahibi = self.ruhsat_sahibi.text().strip()
+        yakit_cinsi = self.yakit_cinsi.currentText().strip()
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
         if not cari_kodu or not plaka or not arac_tipi:
@@ -205,13 +251,12 @@ class AddCarForm(QWidget):
 
         # Veritabanına ekle
         try:
-            import sqlite3
             conn = sqlite3.connect("oto_servis.db")
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO ARAÇLAR (cari_kodu, plaka, arac_tipi, model_yili, marka, model)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (cari_kodu, plaka, arac_tipi, model_yili, marka, model))
+                INSERT INTO ARAÇLAR (cari_kodu, plaka, arac_tipi, model_yili, marka, model, sasi_no, ruhsat_sahibi_adi, yakit_cinsi)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (cari_kodu, plaka, arac_tipi, model_yili, marka, model, sasi_no, ruhsat_sahibi, yakit_cinsi))
             conn.commit()
             print("Araç başarıyla eklendi!")
             self.close()  # Formu kapat
