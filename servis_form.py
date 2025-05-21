@@ -296,8 +296,9 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
         # Alt Butonlar
         btn_emri_olustur = self._buton("EMRİ OLUŞTUR", 'fa5s.save', 'deepskyblue')
-        btn_emri_olustur.clicked.connect(self.emri_olustur)  # <-- Ekle
+        btn_emri_olustur.clicked.connect(self.emri_olustur)
         btn_islemleri_temizle = self._buton("İŞLEMİ SİL", 'fa5s.sync', '#fbc02d')
+        btn_islemleri_temizle.clicked.connect(self.islem_sil)  # <-- EKLENDİ
         btn_pdf_aktar = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
         btn_sayfa_kapat = self._buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
         btn_sayfa_kapat.clicked.connect(self.sayfayi_kapat)  # <-- Ekle
@@ -481,6 +482,15 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         # Bilgilendirme penceresini göster
         bilgi = BilgilendirmePenceresi(self)
         bilgi.exec_()
+
+    def islem_sil(self):
+        """Seçili işlemi tablodan siler."""
+        selected = self.islem_table.currentRow()
+        if selected >= 0:
+            self.islem_table.removeRow(selected)
+            self.guncelle_islem_ozeti()
+        else:
+            QMessageBox.warning(self, "Uyarı", "Lütfen silmek için bir işlem seçin!")
 
 class BilgilendirmePenceresi(QDialog):
     def __init__(self, parent=None):

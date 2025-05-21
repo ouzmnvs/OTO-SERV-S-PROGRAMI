@@ -5,13 +5,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDateTime
 from qtawesome import icon
 import sys
-from database_progress import add_islem  # İşlem ekleme fonksiyonunu içe aktarın
+from database_progress import add_islem, load_service_operations  # İşlem ekleme ve yükleme fonksiyonlarını içe aktarın
 
 class ServiceUpdateForm(QWidget):
     def __init__(self):
         super().__init__()
         self.servis_id = None  # Düzenlenen servis ID'sini tutmak için
         self.pending_operations = []  # Yeni işlemleri geçici olarak tutmak için
+        self.deleted_operations = []  # Silinecek işlemler için liste
+        self.existing_operations = []  # Var olan işlemler
         self.setWindowTitle("İş Emri Formu")
         self.init_ui()
 
@@ -176,8 +178,9 @@ class ServiceUpdateForm(QWidget):
         btn_guncelle = QPushButton(icon('fa5s.edit', color='#0288d1'), "GÜNCELLE")
         btn_guncelle.setMinimumHeight(40)
         btn_guncelle.clicked.connect(self.guncelle_servis)  # Güncelle butonuna tıklama olayı bağlandı
-        btn_islemleri_temizle = QPushButton(icon('fa5s.sync', color='#fbc02d'), "İŞLEMLERİ TEMİZLİ")
+        btn_islemleri_temizle = QPushButton(icon('fa5s.trash', color='#b71c1c'), "İŞLEMİ SİL")
         btn_islemleri_temizle.setMinimumHeight(40)
+        btn_islemleri_temizle.clicked.connect(self.islem_sil)  # <-- Bağlantı eklendi
         btn_pdf = QPushButton(icon('fa5s.file-pdf', color='#388e3c'), "PDF AKTAR")
         btn_pdf.setMinimumHeight(40)
         btn_kapat = QPushButton(icon('fa5s.times', color='#b71c1c'), "SAYFAYI KAPAT")
@@ -203,6 +206,19 @@ class ServiceUpdateForm(QWidget):
         ana_layout.addLayout(alt_bilgi_layout)
 
         self.setLayout(ana_layout)
+
+    def load_operations(self):
+        """Servis açıldığında mevcut işlemleri yükle."""
+        if self.servis_id:
+            self.existing_operations = load_service_operations(self.servis_id)
+            self.tbl_islemler.setRowCount(0)
+            for islem in self.existing_operations:
+                row = self.tbl_islemler.rowCount()
+                self.tbl_islemler.insertRow(row)
+                # islem = (id, açıklama, tutar, kdv, açıklama)
+                for col, val in enumerate(islem[1:]):  # id hariç
+                    self.tbl_islemler.setItem(row, col, QTableWidgetItem(str(val)))
+            self.guncelle_islem_ozeti()
 
     def islem_ekle(self):
         """Yeni bir işlem ekler ve tabloyu günceller."""
@@ -245,21 +261,21 @@ class ServiceUpdateForm(QWidget):
         self.txt_kdv_oran.setText("20")
 
     def guncelle_servis(self):
-        """Servisi ve yeni işlemleri günceller."""
-        if not self.pending_operations:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.information(self, "Bilgi", "Güncellenecek yeni işlem bulunmuyor.")
-            return
+        from database_progress import delete_islem_by_id
 
-        # Yeni işlemleri veritabanına kaydet
+        # Silinecek işlemleri veritabanından sil
+        for islem_id in self.deleted_operations:
+            delete_islem_by_id(islem_id)
+        self.deleted_operations.clear()
+
+        # Yeni işlemleri ekle
         for islem in self.pending_operations:
             add_islem(self.servis_id, *islem)
-
-        # İşlem listesini temizle
         self.pending_operations.clear()
 
         from PyQt5.QtWidgets import QMessageBox
         QMessageBox.information(self, "Başarılı", "Servis başarıyla güncellendi!")
+        self.load_operations()
 
     def guncelle_islem_ozeti(self):
         """İşlem özetini günceller."""
@@ -269,6 +285,23 @@ class ServiceUpdateForm(QWidget):
             toplam_tutar += float(self.tbl_islemler.item(row, 1).text())
         self.lbl_islem_sayisi.setText(f"Toplam İşlem Sayısı\n{toplam_islem}")
         self.lbl_islem_tutar.setText(f"Toplam İşlem Tutarı\n{toplam_tutar:.2f}")
+
+    def islem_sil(self):
+        selected_row = self.tbl_islemler.currentRow()
+        if selected_row >= 0:
+            if selected_row < len(self.existing_operations):
+                silinecek_islem = self.existing_operations[selected_row]
+                self.deleted_operations.append(silinecek_islem[0])  # id
+                del self.existing_operations[selected_row]
+            else:
+                idx = selected_row - len(self.existing_operations)
+                if idx < len(self.pending_operations):
+                    del self.pending_operations[idx]
+            self.tbl_islemler.removeRow(selected_row)
+            self.guncelle_islem_ozeti()
+        else:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Uyarı", "Lütfen silmek için bir işlem seçin!")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

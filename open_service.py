@@ -179,7 +179,7 @@ class OpenServiceForm(QWidget):
 
         # İşlemleri işlemler tablosuna ekle
         self.update_form.tbl_islemler.setRowCount(len(service_operations))
-        for row, (islem_aciklama, islem_tutari, kdv_orani, aciklama) in enumerate(service_operations):
+        for row, (id,islem_aciklama, islem_tutari, kdv_orani, aciklama) in enumerate(service_operations):
             self.update_form.tbl_islemler.setItem(row, 0, QTableWidgetItem(islem_aciklama))
             self.update_form.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{islem_tutari:.2f}"))
             self.update_form.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{kdv_orani:.2f}"))

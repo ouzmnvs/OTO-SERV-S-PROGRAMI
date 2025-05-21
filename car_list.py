@@ -148,7 +148,9 @@ class CarListForm(QWidget):
             self.dashboard_ref.show()
 
     def yeni_arac_ekle_ac(self):
-        self.add_car_form = AddCarForm(dashboard_ref=self)
+        def tabloyu_guncelle():
+            self.load_data_to_table()
+        self.add_car_form = AddCarForm(dashboard_ref=self, on_saved=tabloyu_guncelle)
         self.add_car_form.show()
         self.hide()
 

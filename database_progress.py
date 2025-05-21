@@ -190,16 +190,13 @@ def load_closed_services():
         cursor.execute("""
             SELECT 
                 s.id,
-                s.plaka,
-                a.arac_tipi,
                 s.cari_kodu,
                 c.cari_ad_unvan,
-                c.cep_telefonu,
+                s.plaka,
                 s.servis_tarihi,
                 s.servis_tutar
             FROM SERVİSLER s
             LEFT JOIN CARİ c ON s.cari_kodu = c.cari_kodu
-            LEFT JOIN ARAÇLAR a ON s.plaka = a.plaka
             WHERE s.servis_durumu = 'Kapalı'
         """)
         return cursor.fetchall()
@@ -210,18 +207,18 @@ def load_closed_services():
         conn.close()
 
 def load_service_operations(servis_id):
-    """Belirtilen servis ID'sine ait işlemleri döndürür."""
+    """Belirtilen servis ID'sine ait işlemleri id ile birlikte döndürür."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT islem_aciklama, islem_tutari, kdv_orani, aciklama
+            SELECT id, islem_aciklama, islem_tutari, kdv_orani, aciklama
             FROM İŞLEMLER
             WHERE servis_id = ?
         """, (servis_id,))
         results = cursor.fetchall()
-        return results  # İşlemleri döndür
+        return results  # [(id, açıklama, tutar, kdv, açıklama), ...]
     except sqlite3.Error as e:
         print(f"Veritabanı hatası: {e}")
         return []
@@ -279,28 +276,43 @@ def close_service(servis_id):
     finally:
         conn.close()
 
-def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka):
-    """Ödeme alır, cari borcunu ve servis tutarını günceller ve KASA'ya detaylı kayıt ekler."""
+def delete_islem_by_id(islem_id):
+    """İşlemi id ile siler ve servis tutarını günceller."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
+        # Önce tutarı ve servis_id'yi al
+        cursor.execute("SELECT servis_id, islem_tutari FROM İŞLEMLER WHERE id = ?", (islem_id,))
+        row = cursor.fetchone()
+        if row:
+            servis_id, islem_tutari = row
+            cursor.execute("DELETE FROM İŞLEMLER WHERE id = ?", (islem_id,))
+            cursor.execute("""
+                UPDATE SERVİSLER
+                SET servis_tutar = servis_tutar - ?
+                WHERE id = ?
+            """, (islem_tutari, servis_id))
+            conn.commit()
+    except sqlite3.Error as e:
+        print(f"Bir hata oluştu: {e}")
+    finally:
+        conn.close()
 
-        # Servis tutarını güncelle
-        cursor.execute("UPDATE SERVİSLER SET servis_tutar = servis_tutar - ? WHERE id = ?", (tutar, servis_id))
-
-        # Cari borcunu güncelle
-        cursor.execute("UPDATE CARİ SET borc = borc - ? WHERE cari_kodu = ?", (tutar, cari_kodu))
-
-        # Kasa hareketine detaylı ekle
+def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka):
+    """KASA tablosuna ödeme kaydeder."""
+    import sqlite3
+    from datetime import datetime
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute("""
             INSERT INTO KASA (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama)
-            VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?, ?, ?)
-        """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tutar, odeme_tipi, aciklama))
-
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama))
         conn.commit()
     except sqlite3.Error as e:
-        print(f"Veritabanı hatası: {e}")
-        raise
+        print(f"Ödeme kaydedilemedi: {e}")
     finally:
         conn.close()

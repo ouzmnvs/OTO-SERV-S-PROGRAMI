@@ -9,9 +9,10 @@ import sys
 from cari_select_list import CariSelectListForm  # En üste ekleyin
 
 class AddCarForm(QWidget):
-    def __init__(self, dashboard_ref=None):
+    def __init__(self, dashboard_ref=None, on_saved=None):
         super().__init__()
         self.dashboard_ref = dashboard_ref
+        self.on_saved = on_saved  # Callback fonksiyonu
         self.setWindowTitle("Araç Ekleme Formu")
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
@@ -259,6 +260,8 @@ class AddCarForm(QWidget):
             """, (cari_kodu, plaka, arac_tipi, model_yili, marka, model, sasi_no, ruhsat_sahibi, yakit_cinsi))
             conn.commit()
             print("Araç başarıyla eklendi!")
+            if self.on_saved:
+                self.on_saved()  # Tabloyu güncelle
             self.close()  # Formu kapat
             if self.dashboard_ref:
                 self.dashboard_ref.show()
