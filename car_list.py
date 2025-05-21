@@ -140,7 +140,7 @@ class CarListForm(QWidget):
         return btn
 
     def sayfayi_kapat(self):
-        self.close()
+        self.hide()
         if self.dashboard_ref:
             self.dashboard_ref.show()
 

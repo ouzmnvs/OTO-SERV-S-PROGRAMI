@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
+    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
     QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy
 )
 from PyQt5.QtCore import Qt
@@ -7,11 +7,12 @@ from qtawesome import icon
 import sys
 from database_progress import load_cari_list  # Veritabanı fonksiyonunu içe aktar
 
-class CariSelectListForm(QWidget):
+class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
     def __init__(self, parent_form=None):
-        super().__init__()
+        super().__init__(parent_form)
         self.parent_form = parent_form  # AddCarForm veya ServisForm referansı
-        self.setWindowTitle("Cari Listesi")
+        self.setWindowTitle("Cari Seçim Listesi")
+        self.setModal(True)  # Modal olarak ayarla
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
         genislik = int(ekran.width() * 0.40)

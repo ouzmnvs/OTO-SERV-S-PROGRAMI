@@ -190,13 +190,16 @@ def load_closed_services():
         cursor.execute("""
             SELECT 
                 s.id,
+                s.plaka,
+                a.arac_tipi,
                 s.cari_kodu,
                 c.cari_ad_unvan,
-                s.plaka,
+                c.cep_telefonu,
                 s.servis_tarihi,
                 s.servis_tutar
             FROM SERVİSLER s
             LEFT JOIN CARİ c ON s.cari_kodu = c.cari_kodu
+            LEFT JOIN ARAÇLAR a ON s.plaka = a.plaka
             WHERE s.servis_durumu = 'Kapalı'
         """)
         return cursor.fetchall()
@@ -273,5 +276,31 @@ def close_service(servis_id):
         conn.commit()
     except sqlite3.Error as e:
         print(f"Veritabanı hatası: {e}")
+    finally:
+        conn.close()
+
+def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama):
+    """Ödeme alır, cari borcunu ve servis tutarını günceller."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+
+        # Servis tutarını güncelle
+        cursor.execute("UPDATE SERVİSLER SET servis_tutar = servis_tutar - ? WHERE id = ?", (tutar, servis_id))
+
+        # Cari borcunu güncelle
+        cursor.execute("UPDATE CARİ SET borc = borc - ? WHERE cari_kodu = ?", (tutar, cari_kodu))
+
+        # Kasa hareketine ekle
+        cursor.execute("""
+            INSERT INTO KASA (tarih, tutar, odeme_tipi, aciklama)
+            VALUES (datetime('now'), ?, ?, ?)
+        """, (tutar, odeme_tipi, aciklama))
+
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        raise
     finally:
         conn.close()

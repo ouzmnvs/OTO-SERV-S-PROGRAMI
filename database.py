@@ -64,6 +64,17 @@ CREATE TABLE IF NOT EXISTS SERVİSLER (
 )
 """)
 
+# KASA tablosunu oluştur
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS KASA (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tarih TEXT NOT NULL,  -- Ödeme tarihi
+    tutar REAL NOT NULL,  -- Ödeme tutarı
+    odeme_tipi TEXT NOT NULL,  -- Ödeme tipi (Nakit, Kredi Kartı, Havale)
+    aciklama TEXT  -- Ödeme açıklaması
+)
+""")
+
 # Değişiklikleri kaydet ve bağlantıyı kapat
 conn.commit()
 conn.close()

@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDateEdit, QToolButton, QMenu
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDateEdit, QToolButton, QMenu, QMessageBox, QDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from qtawesome import icon
 import sys
 from database_progress import load_closed_services  # Kapalı servisleri yüklemek için fonksiyonu içe aktarın
+from odeme_al import OdemeAlForm
 
 class CloseServiceForm(QWidget):
     def __init__(self):
@@ -30,11 +31,12 @@ class CloseServiceForm(QWidget):
         # Üst butonlar
         buton_layout = QHBoxLayout()
         buton_layout.setSpacing(10)
+        btn_odeme_al = self.stil_buton("ÖDEME AL", 'fa5s.money-bill', '#43a047')
 
         btn_onayi_iptal_et = self.stil_buton("ONAYI İPTAL ET", 'fa5s.times-circle', '#b71c1c')
         btn_kaydi_sil = self.stil_buton("KAYDI SİL", 'fa5s.trash', '#f44336')
         btn_detay_goruntule = self.stil_buton("DETAY GÖRÜNTÜLE", 'fa5s.info-circle', '#455a64')
-        btn_odeme_al = self.stil_buton("ÖDEME AL", 'fa5s.money-bill', '#43a047')
+        
         btn_pdf_aktar = self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#0288d1')
         btn_sayfayi_kapat = self.stil_buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
 
@@ -44,7 +46,7 @@ class CloseServiceForm(QWidget):
         buton_layout.addWidget(btn_odeme_al)
         buton_layout.addWidget(btn_pdf_aktar)
         buton_layout.addWidget(btn_sayfayi_kapat)
-
+        btn_odeme_al.clicked.connect(self.odeme_al_ac)  # Doğru bağlantı
         ana_layout.addLayout(buton_layout)
 
         # Filtre alanı
@@ -292,17 +294,48 @@ class CloseServiceForm(QWidget):
         return btn
 
     def load_closed_services_to_table(self):
-        """Kapalı servisleri tabloya yükler."""
         closed_services = load_closed_services()
         self.table.setRowCount(len(closed_services))
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels([
+            "Araç Plakası", "Araç Tipi", "Cari Kodu", "Cari Ünvanı", "Telefon", "Tarih", "Tutar"
+        ])
 
-        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar) in enumerate(closed_services):
-            self.table.setItem(row, 0, QTableWidgetItem(str(servis_id)))
-            self.table.setItem(row, 1, QTableWidgetItem(cari_kodu))
-            self.table.setItem(row, 2, QTableWidgetItem(cari_unvan))
-            self.table.setItem(row, 3, QTableWidgetItem(plaka))
-            self.table.setItem(row, 4, QTableWidgetItem(tarih))
-            self.table.setItem(row, 5, QTableWidgetItem(f"{tutar:.2f}"))
+        for row, (servis_id, plaka, arac_tipi, cari_kodu, cari_unvan, telefon, tarih, tutar) in enumerate(closed_services):
+            item_plaka = QTableWidgetItem(plaka or "")
+            item_plaka.setData(Qt.UserRole, servis_id)
+            self.table.setItem(row, 0, item_plaka)
+            self.table.setItem(row, 1, QTableWidgetItem(arac_tipi or ""))
+            self.table.setItem(row, 2, QTableWidgetItem(cari_kodu or ""))
+            self.table.setItem(row, 3, QTableWidgetItem(cari_unvan or ""))
+            self.table.setItem(row, 4, QTableWidgetItem(telefon or ""))
+            self.table.setItem(row, 5, QTableWidgetItem(tarih or ""))
+            self.table.setItem(row, 6, QTableWidgetItem(f"{tutar:.2f}"))
+
+    def odeme_al_ac(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
+            return
+
+        try:
+            servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)  # Eğer UserRole ile saklanıyorsa
+            if servis_id is None:
+                # Eğer UserRole ile saklanmıyorsa, veritabanından veya tabloya yüklerken ekleyin
+                servis_id = selected_row  # Geçici çözüm, gerçek servis_id ile değiştirin
+
+            plaka = self.table.item(selected_row, 0).text()
+            arac_tipi = self.table.item(selected_row, 1).text()
+            cari_kodu = self.table.item(selected_row, 2).text()
+            cari_ad_unvan = self.table.item(selected_row, 3).text()
+            telefon = self.table.item(selected_row, 4).text()
+            toplam_tutar = float(self.table.item(selected_row, 6).text().replace(",", "").replace(" TL", ""))
+
+            odeme_form = OdemeAlForm(servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, self)
+            if odeme_form.exec_() == QDialog.Accepted:
+                self.load_closed_services_to_table()
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
 class OpenServiceForm(QWidget):
     def __init__(self):

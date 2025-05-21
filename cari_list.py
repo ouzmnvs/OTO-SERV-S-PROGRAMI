@@ -1,12 +1,12 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
-    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QSizePolicy
+    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QSizePolicy, QMessageBox, QDialog
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_cari_list  # Cari bilgilerini yüklemek için fonksiyonu içe aktarın
-
+from odeme_al import OdemeAlForm
 class CariListForm(QWidget):
     def __init__(self):
         super().__init__()
@@ -163,6 +163,21 @@ class CariListForm(QWidget):
         """)
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return btn
+
+    def odeme_al(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
+            return
+
+        cari_kodu = self.table.item(selected_row, 0).text()
+        cari_ad_unvan = self.table.item(selected_row, 1).text()
+        telefon = self.table.item(selected_row, 2).text()
+        bakiye = float(self.table.item(selected_row, 4).text())
+
+        odeme_form = OdemeAlForm(cari_kodu, cari_ad_unvan, telefon, bakiye, self)
+        if odeme_form.exec_() == QDialog.Accepted:
+            self.load_cari_list_to_table()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

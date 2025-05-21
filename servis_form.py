@@ -455,23 +455,13 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             print("Lütfen en az bir işlem ekleyin!")
             return
 
-        # Servis kaydı oluştur
+        # Servis ve işlemleri kaydet
         servis_id = add_servis(cari_kodu, plaka, servis_tarihi, aciklama)
-        if not servis_id:
-            print("Servis oluşturulamadı!")
-            return
-
-        # İşlemleri servise bağla
         for row in range(toplam_islem):
             islem_aciklama = self.islem_table.item(row, 0).text()
             islem_tutari = float(self.islem_table.item(row, 1).text())
             kdv_orani = float(self.islem_table.item(row, 2).text())
-            islem_aciklama_detay = self.islem_table.item(row, 3).text()
-
-            # İşlemi veritabanına ekle
-            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, islem_aciklama_detay)
-
-        print("Servis ve işlemler başarıyla kaydedildi.")
+            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama)
 
         # Formu temizle
         self.islem_table.setRowCount(0)

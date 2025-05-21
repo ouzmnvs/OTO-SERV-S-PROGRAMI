@@ -1,15 +1,15 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
-    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMessageBox
+    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMessageBox, QDialog
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_car_list_by_cari  # Cari koduna göre araçları yüklemek için fonksiyonu içe aktarın
 
-class CarSelectListForm(QWidget):
+class CarSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
     def __init__(self, parent_form=None, cari_kodu=None):
-        super().__init__()
+        super().__init__(parent_form)
         self.parent_form = parent_form  # Parent form referansı
         self.cari_kodu = cari_kodu  # Cari kodu
         self.setWindowTitle("Araç Listesi")
@@ -23,6 +23,7 @@ class CarSelectListForm(QWidget):
         if y < 0:
             y = 0
         self.move(x, y)
+        self.setModal(True)  # Modal olarak ayarla
         self.init_ui()
 
     def init_ui(self):
