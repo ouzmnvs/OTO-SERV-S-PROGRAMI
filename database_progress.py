@@ -167,7 +167,24 @@ def load_open_services():
     finally:
         conn.close()
 
-
+def load_service_operations(servis_id):
+    """Belirtilen servis ID'sine ait işlemleri döndürür."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT islem_aciklama, islem_tutari, kdv_orani, aciklama
+            FROM İŞLEMLER
+            WHERE servis_id = ?
+        """, (servis_id,))
+        results = cursor.fetchall()
+        return results  # İşlemleri döndür
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
+    finally:
+        conn.close()
 
 def load_cari_details(cari_kodu):
     import sqlite3

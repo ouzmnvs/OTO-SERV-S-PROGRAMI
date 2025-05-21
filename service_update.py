@@ -5,10 +5,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDateTime
 from qtawesome import icon
 import sys
+from database_progress import add_islem  # İşlem ekleme fonksiyonunu içe aktarın
 
 class ServiceUpdateForm(QWidget):
     def __init__(self):
         super().__init__()
+        self.servis_id = None  # Düzenlenen servis ID'sini tutmak için
+        self.pending_operations = []  # Yeni işlemleri geçici olarak tutmak için
         self.setWindowTitle("İş Emri Formu")
         self.init_ui()
 
@@ -129,6 +132,7 @@ class ServiceUpdateForm(QWidget):
         self.txt_kdv_oran.setText("20")
         btn_ekle = QPushButton(icon('fa5s.plus-circle', color='#43a047'), "Ekle")
         btn_ekle.setMinimumWidth(80)
+        btn_ekle.clicked.connect(self.islem_ekle)  # Ekle butonuna tıklama olayı bağlandı
         islem_layout.addWidget(self.txt_islem_aciklama, 2)
         islem_layout.addWidget(self.txt_islem_tutar, 1)
         islem_layout.addWidget(self.txt_aciklama, 2)
@@ -169,15 +173,16 @@ class ServiceUpdateForm(QWidget):
         alt_layout.addStretch(1)
 
         # Alt butonlar
-        btn_emri_olustur = QPushButton(icon('fa5s.save', color='#0288d1'), "EMRİ OLUŞTUR")
-        btn_emri_olustur.setMinimumHeight(40)
+        btn_guncelle = QPushButton(icon('fa5s.edit', color='#0288d1'), "GÜNCELLE")
+        btn_guncelle.setMinimumHeight(40)
+        btn_guncelle.clicked.connect(self.guncelle_servis)  # Güncelle butonuna tıklama olayı bağlandı
         btn_islemleri_temizle = QPushButton(icon('fa5s.sync', color='#fbc02d'), "İŞLEMLERİ TEMİZLİ")
         btn_islemleri_temizle.setMinimumHeight(40)
         btn_pdf = QPushButton(icon('fa5s.file-pdf', color='#388e3c'), "PDF AKTAR")
         btn_pdf.setMinimumHeight(40)
         btn_kapat = QPushButton(icon('fa5s.times', color='#b71c1c'), "SAYFAYI KAPAT")
         btn_kapat.setMinimumHeight(40)
-        alt_layout.addWidget(btn_emri_olustur)
+        alt_layout.addWidget(btn_guncelle)
         alt_layout.addWidget(btn_islemleri_temizle)
         alt_layout.addWidget(btn_pdf)
         alt_layout.addWidget(btn_kapat)
@@ -198,6 +203,72 @@ class ServiceUpdateForm(QWidget):
         ana_layout.addLayout(alt_bilgi_layout)
 
         self.setLayout(ana_layout)
+
+    def islem_ekle(self):
+        """Yeni bir işlem ekler ve tabloyu günceller."""
+        islem_aciklama = self.txt_islem_aciklama.text()
+        islem_tutari = self.txt_islem_tutar.text()
+        kdv_orani = self.txt_kdv_oran.text()
+        aciklama = self.txt_aciklama.text()
+
+        # Girdi doğrulama
+        if not islem_aciklama or not islem_tutari or not kdv_orani:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Uyarı", "Lütfen tüm gerekli alanları doldurun!")
+            return
+
+        try:
+            islem_tutari = float(islem_tutari)
+            kdv_orani = float(kdv_orani)
+        except ValueError:
+            QMessageBox.warning(self, "Uyarı", "Lütfen geçerli bir tutar ve KDV oranı girin!")
+            return
+
+        # İşlemi geçici listeye ekle
+        self.pending_operations.append((islem_aciklama, islem_tutari, kdv_orani, aciklama))
+
+        # İşlemler tablosunu güncelle
+        row_count = self.tbl_islemler.rowCount()
+        self.tbl_islemler.insertRow(row_count)
+        self.tbl_islemler.setItem(row_count, 0, QTableWidgetItem(islem_aciklama))
+        self.tbl_islemler.setItem(row_count, 1, QTableWidgetItem(f"{islem_tutari:.2f}"))
+        self.tbl_islemler.setItem(row_count, 2, QTableWidgetItem(f"{kdv_orani:.2f}"))
+        self.tbl_islemler.setItem(row_count, 3, QTableWidgetItem(aciklama))
+
+        # İşlem özetini güncelle
+        self.guncelle_islem_ozeti()
+
+        # Alanları temizle
+        self.txt_islem_aciklama.clear()
+        self.txt_islem_tutar.clear()
+        self.txt_aciklama.clear()
+        self.txt_kdv_oran.setText("20")
+
+    def guncelle_servis(self):
+        """Servisi ve yeni işlemleri günceller."""
+        if not self.pending_operations:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Bilgi", "Güncellenecek yeni işlem bulunmuyor.")
+            return
+
+        # Yeni işlemleri veritabanına kaydet
+        for islem in self.pending_operations:
+            add_islem(self.servis_id, *islem)
+
+        # İşlem listesini temizle
+        self.pending_operations.clear()
+
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(self, "Başarılı", "Servis başarıyla güncellendi!")
+
+    def guncelle_islem_ozeti(self):
+        """İşlem özetini günceller."""
+        toplam_tutar = 0
+        toplam_islem = self.tbl_islemler.rowCount()
+        for row in range(toplam_islem):
+            toplam_tutar += float(self.tbl_islemler.item(row, 1).text())
+        self.lbl_islem_sayisi.setText(f"Toplam İşlem Sayısı\n{toplam_islem}")
+        self.lbl_islem_tutar.setText(f"Toplam İşlem Tutarı\n{toplam_tutar:.2f}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

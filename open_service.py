@@ -153,9 +153,10 @@ class OpenServiceForm(QWidget):
         plaka = self.table.item(selected_row, 3).text()
 
         # Veritabanından ek bilgileri yükle
-        from database_progress import load_car_details, load_cari_details
+        from database_progress import load_car_details, load_cari_details, load_service_operations
         cari_details = load_cari_details(cari_kodu)
         car_details = load_car_details(plaka)
+        service_operations = load_service_operations(servis_id)
 
         # ServiceUpdateForm'u aç ve bilgileri aktar
         self.update_form = ServiceUpdateForm()
@@ -168,6 +169,15 @@ class OpenServiceForm(QWidget):
         self.update_form.txt_model_yili.setText(str(car_details.get("model_yili", "")))
         self.update_form.txt_marka.setText(car_details.get("marka", ""))
         self.update_form.txt_model.setText(car_details.get("model", ""))
+        self.update_form.servis_id = int(servis_id)  # Servis ID'sini aktar
+
+        # İşlemleri işlemler tablosuna ekle
+        self.update_form.tbl_islemler.setRowCount(len(service_operations))
+        for row, (islem_aciklama, islem_tutari, kdv_orani, aciklama) in enumerate(service_operations):
+            self.update_form.tbl_islemler.setItem(row, 0, QTableWidgetItem(islem_aciklama))
+            self.update_form.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{islem_tutari:.2f}"))
+            self.update_form.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{kdv_orani:.2f}"))
+            self.update_form.tbl_islemler.setItem(row, 3, QTableWidgetItem(aciklama))
 
         self.update_form.show()
 
