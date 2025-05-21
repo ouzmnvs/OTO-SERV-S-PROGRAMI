@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
-    QGroupBox, QComboBox, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QFrame
+    QGroupBox, QComboBox, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QFrame, QMessageBox
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
@@ -323,6 +323,9 @@ class ServisForm(QWidget):
 
     def open_car_select_list(self):
         """Araç seçme penceresini açar."""
+        if not self.cari_kodu.text().strip():
+            QMessageBox.warning(self, "Uyarı", "Lütfen önce bir cari seçin!")
+            return
         self.car_select_form = CarSelectListForm(parent_form=self)
         self.car_select_form.show()
 
@@ -373,6 +376,14 @@ class ServisForm(QWidget):
 
     def islem_ekle(self):
         """İşlem bilgilerini tabloya ekler."""
+        # Cari ve araç seçimi kontrolü
+        if not self.cari_kodu.text().strip():
+            QMessageBox.warning(self, "Uyarı", "Lütfen önce bir cari seçin!")
+            return
+        if not self.plaka.text().strip():
+            QMessageBox.warning(self, "Uyarı", "Lütfen önce bir araç seçin!")
+            return
+
         # Formdaki bilgileri al
         islem_aciklama = self.islem_aciklama.text().strip()
         islem_tutari = self.islem_tutar.text().strip()
@@ -381,7 +392,7 @@ class ServisForm(QWidget):
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
         if not islem_aciklama or not islem_tutari:
-            print("Lütfen gerekli alanları doldurun!")
+            QMessageBox.warning(self, "Uyarı", "Lütfen gerekli alanları doldurun!")
             return
 
         try:
@@ -405,11 +416,11 @@ class ServisForm(QWidget):
             self.kdv_orani.clear()
             self.islem_ek_aciklama.clear()
 
-            print("İşlem tabloya başarıyla eklendi.")
+            print("İşlem başarıyla eklendi")
         except ValueError:
-            print("KDV Oranı geçerli bir sayı olmalıdır!")
+            QMessageBox.warning(self, "Hata", "KDV Oranı geçerli bir sayı olmalıdır!")
         except Exception as e:
-            print(f"Bir hata oluştu: {e}")
+            QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
     def guncelle_islem_ozeti(self):
         """İşlem özetini günceller."""
