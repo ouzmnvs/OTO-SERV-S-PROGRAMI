@@ -297,7 +297,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         # Alt Butonlar
         btn_emri_olustur = self._buton("EMRİ OLUŞTUR", 'fa5s.save', 'deepskyblue')
         btn_emri_olustur.clicked.connect(self.emri_olustur)  # <-- Ekle
-        btn_islemleri_temizle = self._buton("İŞLEMLERİ TEMİZLE", 'fa5s.sync', '#fbc02d')
+        btn_islemleri_temizle = self._buton("İŞLEMİ SİL", 'fa5s.sync', '#fbc02d')
         btn_pdf_aktar = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
         btn_sayfa_kapat = self._buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
         btn_sayfa_kapat.clicked.connect(self.sayfayi_kapat)  # <-- Ekle

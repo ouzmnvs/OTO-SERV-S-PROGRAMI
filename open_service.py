@@ -8,6 +8,8 @@ from database_progress import load_open_services
 from service_update import ServiceUpdateForm
 from database_progress import close_service
 from servis_form import ServisForm  # <-- Doğru dosya adıyla import
+from add_cari import AddCariForm
+
 
 class OpenServiceForm(QWidget):
     def __init__(self):
