@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_car_list
+from add_car import AddCarForm  # En üste ekleyin
 
 class CarListForm(QWidget):
     def __init__(self, dashboard_ref=None):
@@ -32,7 +33,9 @@ class CarListForm(QWidget):
         # Üst butonlar
         buton_layout = QHBoxLayout()
         buton_layout.setSpacing(10)
-        buton_layout.addWidget(self.stil_buton("YENİ ARAÇ EKLE", 'fa5s.plus', '#1976d2'))
+        btn_yeni_arac = self.stil_buton("YENİ ARAÇ EKLE", 'fa5s.plus', '#1976d2')
+        btn_yeni_arac.clicked.connect(self.yeni_arac_ekle_ac)  # <-- Bağlantı EKLENDİ
+        buton_layout.addWidget(btn_yeni_arac)
         buton_layout.addWidget(self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1'))
         buton_layout.addWidget(self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c'))
         buton_layout.addWidget(self.stil_buton("SERVİS KAYITLARI", 'fa5s.tools', '#455a64'))
@@ -143,6 +146,11 @@ class CarListForm(QWidget):
         self.hide()
         if self.dashboard_ref:
             self.dashboard_ref.show()
+
+    def yeni_arac_ekle_ac(self):
+        self.add_car_form = AddCarForm(dashboard_ref=self)
+        self.add_car_form.show()
+        self.hide()
 
 # Dashboard'dan açarken:
 # self.car_list_form = CarListForm(self)

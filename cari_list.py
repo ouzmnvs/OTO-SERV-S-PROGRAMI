@@ -7,6 +7,8 @@ from qtawesome import icon
 import sys
 from database_progress import load_cari_list  # Cari bilgilerini yüklemek için fonksiyonu içe aktarın
 from odeme_al import OdemeAlForm
+from add_cari import AddCariForm  # En üste ekleyin
+
 class CariListForm(QWidget):
     def __init__(self):
         super().__init__()
@@ -30,7 +32,9 @@ class CariListForm(QWidget):
         # Üst butonlar
         buton_layout = QHBoxLayout()
         buton_layout.setSpacing(10)
-        buton_layout.addWidget(self.stil_buton("YENİ CARİ EKLE", 'fa5s.plus-circle', '#43a047'))
+        btn_yeni_cari = self.stil_buton("YENİ CARİ EKLE", 'fa5s.plus-circle', '#43a047')
+        btn_yeni_cari.clicked.connect(self.yeni_cari_ekle_ac)  # <-- Bağlantı EKLENDİ
+        buton_layout.addWidget(btn_yeni_cari)
         buton_layout.addWidget(self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1'))
         buton_layout.addWidget(self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c'))
         buton_layout.addWidget(self.stil_buton("SERVİS HAREKETLERİ", 'fa5s.exchange-alt', '#455a64'))
@@ -178,6 +182,11 @@ class CariListForm(QWidget):
         odeme_form = OdemeAlForm(cari_kodu, cari_ad_unvan, telefon, bakiye, self)
         if odeme_form.exec_() == QDialog.Accepted:
             self.load_cari_list_to_table()
+
+    def yeni_cari_ekle_ac(self):
+        self.add_cari_form = AddCariForm(dashboard_ref=self)
+        self.add_cari_form.show()
+        self.hide()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
