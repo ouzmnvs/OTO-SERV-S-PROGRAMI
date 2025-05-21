@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS İŞLEMLER (
 )
 """)
 
-# SERVİSLER tablosunu oluştur
+# SERVİSLER tablosunu oluştur veya güncelle
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS SERVİSLER (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS SERVİSLER (
     servis_tarihi TEXT NOT NULL,
     aciklama TEXT,
     servis_durumu TEXT DEFAULT 'Açık',  -- Varsayılan değer "Açık"
+    servis_tutar REAL DEFAULT 0,  -- Toplam servis tutarı için sütun
     FOREIGN KEY (cari_kodu) REFERENCES CARİ (cari_kodu) ON DELETE CASCADE,
     FOREIGN KEY (plaka) REFERENCES ARAÇLAR (plaka) ON DELETE CASCADE
 )

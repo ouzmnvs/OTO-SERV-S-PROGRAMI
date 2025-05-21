@@ -34,7 +34,7 @@ def add_arac(cari_kodu, plaka, arac_tipi, model_yili, marka, model):
         conn.close()
 
 def add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama):
-    """İŞLEMLER tablosuna yeni bir işlem ekler."""
+    """İŞLEMLER tablosuna yeni bir işlem ekler ve servis toplam tutarını günceller."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
@@ -46,8 +46,15 @@ def add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama):
         VALUES (?, ?, ?, ?, ?)
         """, (servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama))
         
+        # Servis toplam tutarını güncelle
+        cursor.execute("""
+        UPDATE SERVİSLER
+        SET servis_tutar = servis_tutar + ?
+        WHERE id = ?
+        """, (islem_tutari, servis_id))
+        
         conn.commit()
-        print("İşlem başarıyla eklendi.")
+        print("İşlem başarıyla eklendi ve servis toplam tutarı güncellendi.")
     except sqlite3.Error as e:
         print(f"Bir hata oluştu: {e}")
     finally:
