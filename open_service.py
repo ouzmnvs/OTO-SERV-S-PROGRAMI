@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
+from database_progress import load_open_services  # Açık servisleri yüklemek için fonksiyonu içe aktarın
 
 class OpenServiceForm(QWidget):
     def __init__(self):
@@ -70,8 +71,8 @@ class OpenServiceForm(QWidget):
         ana_layout.addLayout(filtre_layout)
 
         # Tablo
-        self.table = QTableWidget(2, 7)
-        self.table.setHorizontalHeaderLabels(["Araç Plakası", "Araç Tipi", "Cari Kodu", "Cari Ünvanı", "Telefon", "Tarih", "Tutar"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Servis ID", "Cari Kodu", "Cari Ünvanı", "Plaka", "Tarih", "Tutar"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -91,18 +92,8 @@ class OpenServiceForm(QWidget):
             }
         """)
 
-        # Örnek veriler
-        veriler = [
-            ["34 AA 001", "Arazi, SUV & Pikap", "CR002", "MUSTAFA CAN", "05323323636", "10.03.2025", "750,00"],
-            ["34 AA 001", "Arazi, SUV & Pikap", "CR002", "MUSTAFA CAN", "05323323636", "9.03.2025", "0,00"]
-        ]
-        for row, veri in enumerate(veriler):
-            for col, deger in enumerate(veri):
-                item = QTableWidgetItem(deger)
-                if col == 6:  # Tutar sütunu
-                    if deger == "0,00":
-                        item.setForeground(Qt.red)
-                self.table.setItem(row, col, item)
+        # Açık servisleri tabloya yükle
+        self.load_open_services_to_table()
 
         ana_layout.addWidget(self.table)
 
@@ -131,6 +122,19 @@ class OpenServiceForm(QWidget):
             }}
         """)
         return btn
+
+    def load_open_services_to_table(self):
+        """Açık servisleri tabloya yükler."""
+        open_services = load_open_services()
+        self.table.setRowCount(len(open_services))  # Satır sayısını ayarla
+
+        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum) in enumerate(open_services):
+            self.table.setItem(row, 0, QTableWidgetItem(str(servis_id)))
+            self.table.setItem(row, 1, QTableWidgetItem(cari_kodu))
+            self.table.setItem(row, 2, QTableWidgetItem(cari_unvan))
+            self.table.setItem(row, 3, QTableWidgetItem(plaka))
+            self.table.setItem(row, 4, QTableWidgetItem(tarih))
+            self.table.setItem(row, 5, QTableWidgetItem(f"{tutar:.2f}"))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -136,3 +136,33 @@ def load_car_list_by_cari(cari_kodu):
         return []
     finally:
         conn.close()
+
+def load_open_services():
+    """Servis durumu 'Açık' olan servisleri yükler."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        
+        # Açık servisleri sorgula
+        cursor.execute("""
+        SELECT 
+            s.id,
+            s.cari_kodu,
+            c.cari_ad_unvan,
+            s.plaka,
+            s.servis_tarihi,
+            s.servis_tutar,
+            s.servis_durumu
+        FROM SERVİSLER s
+        LEFT JOIN CARİ c ON s.cari_kodu = c.cari_kodu
+        WHERE s.servis_durumu = 'Açık'
+        """)
+        
+        results = cursor.fetchall()
+        return results  # Açık servisleri döndür
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
+    finally:
+        conn.close()
