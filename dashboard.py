@@ -174,7 +174,7 @@ class Dashboard(QWidget):
 
     def servis_girisi_ekle_ac(self):
         self.servis_form = ServisForm(self)
-        self.hide()
+        self.servis_form.setModal(True)  # Modal olarak ayarla (ana pencereyi kilitler)
         self.servis_form.show()
 
     def open_open_service_form(self):

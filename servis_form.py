@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
-    QGroupBox, QComboBox, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QFrame, QMessageBox
+    QGroupBox, QComboBox, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QFrame, QMessageBox, QDialog
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
@@ -9,7 +9,7 @@ from cari_select_list import CariSelectListForm  # CariSelectListForm'u içe akt
 from car_select_list import CarSelectListForm  # CarSelectListForm'u içe aktarın
 from database_progress import add_servis, add_islem  # Servis ekleme fonksiyonunu içe aktarın
 from datetime import datetime
-class ServisForm(QWidget):
+class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
     def __init__(self, dashboard_ref=None):
         super().__init__()
         self.dashboard_ref = dashboard_ref
@@ -370,11 +370,11 @@ class ServisForm(QWidget):
         """)
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return btn
-
     def sayfayi_kapat(self):
-        self.close()
+        """Servis formunu kapatır ve dashboard ekranına geri döner."""
+        self.close()  # QDialog'da close() kullanılır
         if self.dashboard_ref:
-            self.dashboard_ref.show()
+            self.dashboard_ref.show()  # Dashboard ekranını tekrar göster
 
     def islem_ekle(self):
         """İşlem bilgilerini tabloya ekler."""
