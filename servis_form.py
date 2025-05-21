@@ -326,7 +326,9 @@ class ServisForm(QWidget):
         if not self.cari_kodu.text().strip():
             QMessageBox.warning(self, "Uyarı", "Lütfen önce bir cari seçin!")
             return
-        self.car_select_form = CarSelectListForm(parent_form=self)
+
+        cari_kodu = self.cari_kodu.text().strip()
+        self.car_select_form = CarSelectListForm(parent_form=self, cari_kodu=cari_kodu)
         self.car_select_form.show()
 
     def set_cari_bilgileri(self, cari_kodu, cari_unvani, telefon, cari_tipi):

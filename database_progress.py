@@ -103,3 +103,29 @@ def load_car_list():
         return []
     finally:
         conn.close()
+
+def load_car_list_by_cari(cari_kodu):
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        
+        # Cari koduna göre araçları filtrele
+        cursor.execute("""
+        SELECT 
+            a.plaka,
+            a.arac_tipi,
+            a.model_yili,
+            a.marka,
+            a.model
+        FROM ARAÇLAR a
+        WHERE a.cari_kodu = ?
+        """, (cari_kodu,))
+        
+        results = cursor.fetchall()
+        return results  # Verileri döndür
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
+    finally:
+        conn.close()

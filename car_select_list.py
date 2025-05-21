@@ -1,17 +1,17 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
-    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy
+    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMessageBox
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from database_progress import load_car_list  
-# from servis_form import ServisForm  
-# from add_car import AddCarForm  
+from database_progress import load_car_list_by_cari  # Cari koduna göre araçları yüklemek için fonksiyonu içe aktarın
+
 class CarSelectListForm(QWidget):
-    def __init__(self, parent_form=None):
+    def __init__(self, parent_form=None, cari_kodu=None):
         super().__init__()
         self.parent_form = parent_form  # Parent form referansı
+        self.cari_kodu = cari_kodu  # Cari kodu
         self.setWindowTitle("Araç Listesi")
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
@@ -36,10 +36,8 @@ class CarSelectListForm(QWidget):
         btn_aktar.clicked.connect(self.bilgileri_aktar)
         btn_iptal = self.stil_buton("İptal", 'fa5s.times', '#b71c1c')
         btn_iptal.clicked.connect(self.close)
-        btn_yeni = self.stil_buton("Yeni Ekle", 'fa5s.plus-circle', '#43a047')
         buton_layout.addWidget(btn_aktar)
         buton_layout.addWidget(btn_iptal)
-        buton_layout.addWidget(btn_yeni)
         ana_layout.addLayout(buton_layout)
 
         # Tablo
@@ -74,9 +72,13 @@ class CarSelectListForm(QWidget):
 
     def load_data_to_table(self):
         """Veritabanından gelen verileri tabloya yükler."""
-        araclar = load_car_list()  # Veritabanından verileri al
+        if not self.cari_kodu:
+            QMessageBox.warning(self, "Uyarı", "Cari kodu bulunamadı!")
+            return
+
+        araclar = load_car_list_by_cari(self.cari_kodu)  # Cari koduna göre araçları yükle
         self.table.setRowCount(len(araclar))  # Satır sayısını ayarla
-        for row, (cari_kodu, cari_unvan, plaka, arac_tipi, model_yili, marka, model) in enumerate(araclar):
+        for row, (plaka, arac_tipi, model_yili, marka, model) in enumerate(araclar):
             self.table.setItem(row, 0, QTableWidgetItem(plaka))
             self.table.setItem(row, 1, QTableWidgetItem(arac_tipi))
             self.table.setItem(row, 2, QTableWidgetItem(str(model_yili)))
