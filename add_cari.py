@@ -7,9 +7,10 @@ from qtawesome import icon
 import sys
 
 class AddCariForm(QWidget):
-    def __init__(self, dashboard_ref=None):
+    def __init__(self, dashboard_ref=None, on_saved=None):
         super().__init__()
         self.dashboard_ref = dashboard_ref
+        self.on_saved = on_saved  # Callback fonksiyonu
         self.setWindowTitle("Cari Formu")
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
@@ -169,6 +170,8 @@ class AddCariForm(QWidget):
             """, (cari_kodu, cari_unvan, tc_kimlik_no, vergi_no, cep_telefonu, cari_tipi, 0))  # Borç varsayılan olarak 0
             conn.commit()
             print("Cari başarıyla eklendi!")
+            if self.on_saved:
+                self.on_saved()  # Callback'i çağır
             self.close()  # Formu kapat
             if self.dashboard_ref:
                 self.dashboard_ref.show()

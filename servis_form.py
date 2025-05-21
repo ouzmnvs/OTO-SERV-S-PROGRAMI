@@ -297,7 +297,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         # Alt Butonlar
         btn_emri_olustur = self._buton("EMRİ OLUŞTUR", 'fa5s.save', 'deepskyblue')
         btn_emri_olustur.clicked.connect(self.emri_olustur)  # <-- Ekle
-        btn_islemleri_temizle = self._buton("İŞLEMLERİ TEMİZLE", 'fa5s.sync', '#fbc02d')
+        btn_islemleri_temizle = self._buton("İŞLEMİ SİL", 'fa5s.sync', '#fbc02d')
         btn_pdf_aktar = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
         btn_sayfa_kapat = self._buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
         btn_sayfa_kapat.clicked.connect(self.sayfayi_kapat)  # <-- Ekle
@@ -446,13 +446,15 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
         if not cari_kodu or not plaka:
-            print("Lütfen cari kodu ve plaka bilgilerini doldurun!")
+            uyari = UyariPenceresi("Lütfen cari kodu ve plaka bilgilerini doldurun!", self)
+            uyari.exec_()
             return
 
         # İşlem tablosunun boş olup olmadığını kontrol et
         toplam_islem = self.islem_table.rowCount()
         if toplam_islem == 0:
-            print("Lütfen en az bir işlem ekleyin!")
+            uyari = UyariPenceresi("Lütfen en az bir işlem ekleyin!", self)
+            uyari.exec_()
             return
 
         # Servis ve işlemleri kaydet
@@ -475,6 +477,53 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.model_yili.clear()
         self.marka.clear()
         self.model.clear()
+
+        # Bilgilendirme penceresini göster
+        bilgi = BilgilendirmePenceresi(self)
+        bilgi.exec_()
+
+class BilgilendirmePenceresi(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Bilgilendirme")
+        self.setFixedSize(350, 120)
+        layout = QVBoxLayout()
+        label = QLabel("Emir oluşturuldu, açık servislerde görüntüleyebilirsiniz.")
+        label.setStyleSheet("font-size: 15px; padding: 12px;")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        # Tamam butonunu sağa yasla ve küçült
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_tamam = QPushButton("Tamam")
+        btn_tamam.setFixedSize(80, 28)
+        btn_tamam.clicked.connect(self.accept)
+        btn_layout.addWidget(btn_tamam)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+
+class UyariPenceresi(QDialog):
+    def __init__(self, mesaj, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Uyarı")
+        self.setFixedSize(350, 120)
+        layout = QVBoxLayout()
+        label = QLabel(mesaj)
+        label.setStyleSheet("font-size: 15px; padding: 12px;")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_tamam = QPushButton("Tamam")
+        btn_tamam.setFixedSize(80, 28)
+        btn_tamam.clicked.connect(self.accept)
+        btn_layout.addWidget(btn_tamam)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

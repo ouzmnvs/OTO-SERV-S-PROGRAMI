@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_cari_list  # Veritabanı fonksiyonunu içe aktar
+from add_cari import AddCariForm  # Satırın başına ekleyin
 
 class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
     def __init__(self, parent_form=None):
@@ -36,6 +37,7 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         btn_aktar.clicked.connect(self.bilgileri_aktar)
         btn_iptal = self.stil_buton("İptal", 'fa5s.times', '#b71c1c')
         btn_yeni = self.stil_buton("Yeni Ekle", 'fa5s.plus-circle', '#43a047')
+        btn_yeni.clicked.connect(self.yeni_cari_ekle_ac)  # <-- Bu satırı ekleyin
         buton_layout.addWidget(btn_aktar)
         buton_layout.addWidget(btn_iptal)
         buton_layout.addWidget(btn_yeni)
@@ -137,6 +139,13 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             if hasattr(self.parent_form, 'set_cari_bilgileri'):
                 self.parent_form.set_cari_bilgileri(cari_kodu, cari_unvani, telefon, cari_tipi)
             self.close()
+
+    def yeni_cari_ekle_ac(self):
+        def tabloyu_guncelle():
+            self.load_data_to_table()
+        self.add_cari_form = AddCariForm(on_saved=tabloyu_guncelle)
+        self.add_cari_form.setWindowModality(Qt.ApplicationModal)
+        self.add_cari_form.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

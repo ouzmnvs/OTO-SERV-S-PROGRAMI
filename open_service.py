@@ -4,9 +4,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from database_progress import load_open_services  # Açık servisleri yüklemek için fonksiyonu içe aktarın
-from service_update import ServiceUpdateForm  # En üste ekleyin
-from database_progress import close_service  # Servisi kapatmak için fonksiyonu içe aktarın
+from database_progress import load_open_services
+from service_update import ServiceUpdateForm
+from database_progress import close_service
+from servis_form import ServisForm  # <-- Doğru dosya adıyla import
+from add_cari import AddCariForm
+
 
 class OpenServiceForm(QWidget):
     def __init__(self):
@@ -49,6 +52,7 @@ class OpenServiceForm(QWidget):
 
         btn_kaydi_duzenle.clicked.connect(self.kaydi_duzenle)  # Bu satırı ekleyin
         btn_kaydi_onayla.clicked.connect(self.kaydi_onayla)  # Bu satırı ekleyin
+        btn_yeni_servis.clicked.connect(self.yeni_servis_girisi)
 
         ana_layout.addLayout(buton_layout)
 
@@ -201,6 +205,10 @@ class OpenServiceForm(QWidget):
 
         from PyQt5.QtWidgets import QMessageBox
         QMessageBox.information(self, "Başarılı", "Servis başarıyla kapatıldı!")
+
+    def yeni_servis_girisi(self):
+        self.servis_form = ServisForm()
+        self.servis_form.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
