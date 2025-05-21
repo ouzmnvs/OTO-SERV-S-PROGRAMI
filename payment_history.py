@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, QDate
 from qtawesome import icon
 import sys
+import sqlite3
 
 class PaymentHistoryForm(QWidget):
     def __init__(self):
@@ -15,7 +16,6 @@ class PaymentHistoryForm(QWidget):
         self.init_ui()
 
     def resize_and_center(self):
-        # Ekran boyutlarına göre pencereyi orantılı ayarla (close_service.py referansı)
         screen = QDesktopWidget().screenGeometry()
         width = int(screen.width() * 0.86)
         height = int(screen.height() * 0.86)
@@ -46,7 +46,7 @@ class PaymentHistoryForm(QWidget):
     def init_ui(self):
         ana_layout = QVBoxLayout()
         
-        # Üst butonlar (close_service.py referansına uygun)
+        # Üst butonlar
         ust_butonlar = QHBoxLayout()
         ust_butonlar.setSpacing(10)
 
@@ -75,7 +75,6 @@ class PaymentHistoryForm(QWidget):
         """)
         filtre_layout = QHBoxLayout(filtre_frame)
 
-        # Cari bilgi filtresi
         self.cari_filtre = QLineEdit()
         self.cari_filtre.setPlaceholderText("Cari Kodu, Cari Adı, Plaka veya Telefon")
         self.cari_filtre.setStyleSheet("""
@@ -87,7 +86,6 @@ class PaymentHistoryForm(QWidget):
         """)
         filtre_layout.addWidget(self.cari_filtre)
 
-        # Başlangıç tarihi (QDateEdit)
         self.baslangic_tarihi = QDateEdit()
         self.baslangic_tarihi.setDate(QDate.currentDate())
         self.baslangic_tarihi.setCalendarPopup(True)
@@ -107,9 +105,7 @@ class PaymentHistoryForm(QWidget):
         """)
         filtre_layout.addWidget(self.baslangic_tarihi)
 
-        # Bitiş tarihi (QDateEdit)
         self.bitis_tarihi = QDateEdit()
-        # İlk açılışta bitiş tarihi, başlangıç tarihinin 7 gün sonrası olsun
         self.bitis_tarihi.setDate(self.baslangic_tarihi.date().addDays(7))
         self.bitis_tarihi.setCalendarPopup(True)
         self.bitis_tarihi.setDisplayFormat("dd.MM.yyyy")
@@ -128,10 +124,9 @@ class PaymentHistoryForm(QWidget):
         """)
         filtre_layout.addWidget(self.bitis_tarihi)
 
-        # Takvim popup stilleri (günlerle orantılı olarak daha geniş ve yüksek)
         for dateedit in [self.baslangic_tarihi, self.bitis_tarihi]:
             takvim = dateedit.calendarWidget()
-            takvim.setFixedSize(440, 325)  # Genişlik ve yükseklik artırıldı
+            takvim.setFixedSize(440, 325)
             takvim.setStyleSheet("""
                 QCalendarWidget QWidget {
                     alternate-background-color: #f6f6f6;
@@ -194,7 +189,6 @@ class PaymentHistoryForm(QWidget):
                 }
             """)
 
-        # Filtrele ve Temizle butonları
         btn_filtrele = self.stil_buton("Filtrele", "fa5s.search", "#1976d2")
         btn_temizle = self.stil_buton("Temizle", "fa5s.sync", "#fb8c00")
         
@@ -204,37 +198,13 @@ class PaymentHistoryForm(QWidget):
 
         # Tablo
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
-            "Cari Kodu", "Cari Ünvanı", "Ödeme Tipi", "Tarih", 
-            "Açıklama", "Borç", "Alacak"
+            "Plaka", "Cari Kodu", "Cari Ünvanı", "Tarih", "Ödeme Tipi", "Alınan Tutar"
         ])
         
-        # Örnek veriler
-        veriler = [
-            ["CR002", "MUSTAFA CAN", "", "10.03.2025", "Servis Bedeli", "5.750,00", "0,00"],
-            ["CR001", "FATİH ÖZ", "", "9.03.2025", "Servis Bedeli", "12.219,21", "0,00"],
-            ["CR002", "MUSTAFA CAN", "Nakit", "9.03.2025", "", "0,00", "2.500,00"],
-            ["CR002", "MUSTAFA CAN", "Kredi Kartı", "9.03.2025", "", "0,00", "10.500,00"],
-            ["CR002", "MUSTAFA CAN", "", "8.03.2025", "Servis Bedeli", "2.000,00", "0,00"],
-            ["CR002", "MUSTAFA CAN", "", "8.03.2025", "Servis Bedeli", "13.750,68", "0,00"],
-            ["CR001", "FATİH ÖZ", "", "8.03.2025", "Servis Bedeli", "1.750,36", "0,00"],
-            ["TD002", "AHMET CANDAN", "Nakit", "7.03.2025", "", "250,00", "0,00"],
-            ["CR001", "FATİH ÖZ", "Kredi Kartı", "7.03.2025", "", "0,00", "1.800,00"],
-            ["TD002", "AHMET CANDAN", "Kredi Kartı", "7.03.2025", "Ödeme Alındı", "0,00", "3.800,00"],
-            ["TD002", "AHMET CANDAN", "Nakit", "7.03.2025", "", "0,00", "111,00"],
-            ["TD002", "AHMET CANDAN", "", "7.03.2025", "Servis Bedeli", "6.300,00", "0,00"]
-        ]
+        self.load_payments()
 
-        self.table.setRowCount(len(veriler))
-        for row, veri in enumerate(veriler):
-            for col, deger in enumerate(veri):
-                item = QTableWidgetItem(deger)
-                if col in [5, 6]:  # Borç ve Alacak sütunları
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                self.table.setItem(row, col, item)
-
-        # Tablo stilleri
         self.table.setStyleSheet("""
             QTableWidget {
                 gridline-color: #d0d0d0;
@@ -249,7 +219,6 @@ class PaymentHistoryForm(QWidget):
             }
         """)
         
-        # Sütun genişlikleri
         header = self.table.horizontalHeader()
         for i in range(self.table.columnCount()):
             header.setSectionResizeMode(i, QHeaderView.Stretch)
@@ -257,7 +226,7 @@ class PaymentHistoryForm(QWidget):
         ana_layout.addWidget(self.table)
 
         # Alt bilgi
-        alt_bilgi = QLabel("12 adet kayıt listeleniyor | Toplam Borç: 42.020,25 TL | Toplam Alacak: 18.711,00 TL | Bakiye: 23.309,25 TL BORÇLU | 7 Günlük Kayıt")
+        alt_bilgi = QLabel("5 adet kayıt listeleniyor | Toplam Alınan: 18.711,00 TL | 7 Günlük Kayıt")
         alt_bilgi.setStyleSheet("""
             QLabel {
                 font-size: 14px;
@@ -269,12 +238,32 @@ class PaymentHistoryForm(QWidget):
 
         self.setLayout(ana_layout)
 
-        # Başlangıç tarihi değişince bitiş tarihini otomatik 7 gün sonrası yap
         self.baslangic_tarihi.dateChanged.connect(self.bitis_tarihini_guncelle)
 
     def bitis_tarihini_guncelle(self):
         yeni_bitis = self.baslangic_tarihi.date().addDays(7)
         self.bitis_tarihi.setDate(yeni_bitis)
+
+    def load_payments(self):
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT plaka, cari_kodu, cari_ad_unvan, tarih, odeme_tipi, tutar
+            FROM KASA
+            ORDER BY datetime(tarih) DESC
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+
+        self.table.setRowCount(len(rows))
+        for row_idx, row in enumerate(rows):
+            for col_idx, value in enumerate(row):
+                if col_idx == 5:  # tutar
+                    item = QTableWidgetItem(f"{value:,.2f} TL")
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                else:
+                    item = QTableWidgetItem(str(value))
+                self.table.setItem(row_idx, col_idx, item)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

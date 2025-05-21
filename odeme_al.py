@@ -5,7 +5,7 @@ from PyQt5.QtCore import QDate
 from database_progress import odeme_al
 
 class OdemeAlForm(QDialog):
-    def __init__(self, servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, parent=None):
+    def __init__(self, servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, parent=None, plaka=""):
         super().__init__(parent)
         self.setWindowTitle("Ödeme Alma Formu")
         self.setFixedSize(400, 400)
@@ -15,6 +15,7 @@ class OdemeAlForm(QDialog):
         self.cari_ad_unvan = cari_ad_unvan
         self.telefon = telefon
         self.toplam_tutar = toplam_tutar
+        self.plaka = plaka  # Plaka bilgisini sakla
 
         self.init_ui()
 
@@ -79,13 +80,15 @@ class OdemeAlForm(QDialog):
             if tutar > self.toplam_tutar:
                 raise ValueError("Tutar, toplam tutardan büyük olamaz.")
 
-            # Servis tutarını ve cari borcunu azalt, kasaya kaydet
+            # Plaka bilgisini gönder
             odeme_al(
                 self.cari_kodu,
                 self.servis_id,
                 tutar,
                 self.odeme_tipi.currentText(),
-                self.aciklama.text()
+                self.aciklama.text(),
+                self.cari_ad_unvan,
+                self.plaka
             )
 
             QMessageBox.information(self, "Başarılı", "Ödeme başarıyla kaydedildi.")

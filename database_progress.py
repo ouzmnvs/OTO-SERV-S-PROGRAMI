@@ -279,8 +279,8 @@ def close_service(servis_id):
     finally:
         conn.close()
 
-def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama):
-    """Ödeme alır, cari borcunu ve servis tutarını günceller."""
+def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka):
+    """Ödeme alır, cari borcunu ve servis tutarını günceller ve KASA'ya detaylı kayıt ekler."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
@@ -292,11 +292,11 @@ def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama):
         # Cari borcunu güncelle
         cursor.execute("UPDATE CARİ SET borc = borc - ? WHERE cari_kodu = ?", (tutar, cari_kodu))
 
-        # Kasa hareketine ekle
+        # Kasa hareketine detaylı ekle
         cursor.execute("""
-            INSERT INTO KASA (tarih, tutar, odeme_tipi, aciklama)
-            VALUES (datetime('now'), ?, ?, ?)
-        """, (tutar, odeme_tipi, aciklama))
+            INSERT INTO KASA (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama)
+            VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?, ?, ?)
+        """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tutar, odeme_tipi, aciklama))
 
         conn.commit()
     except sqlite3.Error as e:

@@ -319,19 +319,19 @@ class CloseServiceForm(QWidget):
             return
 
         try:
-            servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)  # Eğer UserRole ile saklanıyorsa
+            servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)
             if servis_id is None:
-                # Eğer UserRole ile saklanmıyorsa, veritabanından veya tabloya yüklerken ekleyin
-                servis_id = selected_row  # Geçici çözüm, gerçek servis_id ile değiştirin
+                servis_id = selected_row  # Geçici çözüm
 
-            plaka = self.table.item(selected_row, 0).text()
+            plaka = self.table.item(selected_row, 0).text()  # Plaka sütunu
             arac_tipi = self.table.item(selected_row, 1).text()
             cari_kodu = self.table.item(selected_row, 2).text()
             cari_ad_unvan = self.table.item(selected_row, 3).text()
             telefon = self.table.item(selected_row, 4).text()
             toplam_tutar = float(self.table.item(selected_row, 6).text().replace(",", "").replace(" TL", ""))
 
-            odeme_form = OdemeAlForm(servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, self)
+            # Plaka bilgisini parametre olarak gönderin
+            odeme_form = OdemeAlForm(servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, self, plaka=plaka)
             if odeme_form.exec_() == QDialog.Accepted:
                 self.load_closed_services_to_table()
         except Exception as e:

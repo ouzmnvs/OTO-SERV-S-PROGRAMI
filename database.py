@@ -68,10 +68,14 @@ CREATE TABLE IF NOT EXISTS SERVİSLER (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS KASA (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tarih TEXT NOT NULL,  -- Ödeme tarihi
-    tutar REAL NOT NULL,  -- Ödeme tutarı
-    odeme_tipi TEXT NOT NULL,  -- Ödeme tipi (Nakit, Kredi Kartı, Havale)
-    aciklama TEXT  -- Ödeme açıklaması
+    servis_id INTEGER,
+    cari_kodu TEXT,
+    cari_ad_unvan TEXT,
+    plaka TEXT,
+    tarih TEXT NOT NULL,
+    tutar REAL NOT NULL,
+    odeme_tipi TEXT NOT NULL,
+    aciklama TEXT
 )
 """)
 
