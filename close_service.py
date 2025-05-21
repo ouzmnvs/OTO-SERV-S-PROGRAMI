@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from qtawesome import icon
 import sys
+from database_progress import load_closed_services  # Kapalı servisleri yüklemek için fonksiyonu içe aktarın
 
 class CloseServiceForm(QWidget):
     def __init__(self):
@@ -169,6 +170,8 @@ class CloseServiceForm(QWidget):
         # Başlangıç tarihi değişince bitiş tarihini otomatik 7 gün sonrası yap
         self.baslangic_tarihi.dateChanged.connect(self.bitis_tarihini_guncelle)
 
+        self.load_closed_services_to_table()
+
     def update_alt_bilgi_tarih(self):
         """Başlangıç ve bitiş tarihlerini alt bilgiye yansıt."""
         baslangic = self.baslangic_tarihi.date().toString("dd.MM.yyyy")
@@ -287,6 +290,19 @@ class CloseServiceForm(QWidget):
             }}
         """)
         return btn
+
+    def load_closed_services_to_table(self):
+        """Kapalı servisleri tabloya yükler."""
+        closed_services = load_closed_services()
+        self.table.setRowCount(len(closed_services))
+
+        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar) in enumerate(closed_services):
+            self.table.setItem(row, 0, QTableWidgetItem(str(servis_id)))
+            self.table.setItem(row, 1, QTableWidgetItem(cari_kodu))
+            self.table.setItem(row, 2, QTableWidgetItem(cari_unvan))
+            self.table.setItem(row, 3, QTableWidgetItem(plaka))
+            self.table.setItem(row, 4, QTableWidgetItem(tarih))
+            self.table.setItem(row, 5, QTableWidgetItem(f"{tutar:.2f}"))
 
 class OpenServiceForm(QWidget):
     def __init__(self):

@@ -6,6 +6,7 @@ from qtawesome import icon
 import sys
 from database_progress import load_open_services  # Açık servisleri yüklemek için fonksiyonu içe aktarın
 from service_update import ServiceUpdateForm  # En üste ekleyin
+from database_progress import close_service  # Servisi kapatmak için fonksiyonu içe aktarın
 
 class OpenServiceForm(QWidget):
     def __init__(self):
@@ -47,6 +48,7 @@ class OpenServiceForm(QWidget):
         buton_layout.addWidget(btn_sayfayi_kapat)
 
         btn_kaydi_duzenle.clicked.connect(self.kaydi_duzenle)  # Bu satırı ekleyin
+        btn_kaydi_onayla.clicked.connect(self.kaydi_onayla)  # Bu satırı ekleyin
 
         ana_layout.addLayout(buton_layout)
 
@@ -180,6 +182,25 @@ class OpenServiceForm(QWidget):
             self.update_form.tbl_islemler.setItem(row, 3, QTableWidgetItem(aciklama))
 
         self.update_form.show()
+
+    def kaydi_onayla(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
+            return
+
+        # Tablo verilerinden servis ID'sini al
+        servis_id = self.table.item(selected_row, 0).text()
+
+        # Servisi kapat
+        close_service(servis_id)
+
+        # Tabloyu güncelle
+        self.load_open_services_to_table()
+
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(self, "Başarılı", "Servis başarıyla kapatıldı!")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

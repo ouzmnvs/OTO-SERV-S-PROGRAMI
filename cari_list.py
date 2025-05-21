@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
+from database_progress import load_cari_list  # Cari bilgilerini yüklemek için fonksiyonu içe aktarın
 
 class CariListForm(QWidget):
     def __init__(self):
@@ -85,13 +86,12 @@ class CariListForm(QWidget):
         ana_layout.addLayout(filtre_layout)
 
         # Tablo
-        self.table = QTableWidget(3, 7)
+        self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels([
-            "Cari Kodu", "Cari Adı / Ünvanı", "Telefon No", "Cari Tipi", "Borç", "Alacak", "Bakiye"
+            "Cari Kodu", "Cari Adı / Ünvanı", "Telefon No", "Cari Tipi", "Toplam Tutar"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)  # Cari Adı/Ünvanı geniş
-        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Bakiye daraltıldı
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)  # Cari Adı/Ünvanı geniş
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -110,30 +110,39 @@ class CariListForm(QWidget):
             }
         """)
 
-        # Örnek veriler
-        veriler = [
-            ["TD002", "AHMET CANDAN", "05323232322", "Tedarikçi", "6.550,00", "3.911,00", "2.639,00"],
-            ["CR001", "FATİH ÖZ", "05552221122", "Müşteri", "13.969,57", "1.800,00", "12.169,57"],
-            ["CR002", "MUSTAFA CAN", "05323323636", "Müşteri", "15.750,68", "13.000,00", "2.750,68"]
-        ]
-        for row, veri in enumerate(veriler):
-            for col, deger in enumerate(veri):
-                item = QTableWidgetItem(deger)
-                # Alacak yeşil, Bakiye mavi
-                if col == 5:  # Alacak
-                    item.setForeground(Qt.green)
-                if col == 6:  # Bakiye
-                    item.setForeground(Qt.blue)
-                self.table.setItem(row, col, item)
-
         ana_layout.addWidget(self.table)
 
         # Alt bilgi
-        alt_bilgi = QLabel("3 adet kayıt listeleniyor | Toplam Borç: 36.270,25 TL | Toplam Alacak: 18.711,00 TL | Genel Bakiye: 17.559,25 TL")
-        alt_bilgi.setStyleSheet("font-size: 14px; color: #444; padding: 6px 0 0 8px;")
-        ana_layout.addWidget(alt_bilgi)
+        self.alt_bilgi = QLabel("")
+        self.alt_bilgi.setStyleSheet("font-size: 14px; color: #444; padding: 6px 0 0 8px;")
+        ana_layout.addWidget(self.alt_bilgi)
 
         self.setLayout(ana_layout)
+
+        # Verileri yükle
+        self.load_cari_list_to_table()
+
+    def load_cari_list_to_table(self):
+        """Veritabanından cari bilgilerini tabloya yükler."""
+        cari_list = load_cari_list()  # Veritabanından tüm cari bilgilerini al
+        self.table.setRowCount(len(cari_list))  # Tablo satır sayısını ayarla
+
+        toplam_tutar = 0  # Toplam tutar hesaplamak için
+
+        for row, (id, cari_kodu, cari_ad_unvan, cari_tipi, borc, tc_kimlik_no, vergi_no, cep_telefonu, toplam_tutar_cari) in enumerate(cari_list):
+            # Tabloya gerekli alanları ekle
+            self.table.setItem(row, 0, QTableWidgetItem(cari_kodu))
+            self.table.setItem(row, 1, QTableWidgetItem(cari_ad_unvan))
+            self.table.setItem(row, 2, QTableWidgetItem(cep_telefonu))
+            self.table.setItem(row, 3, QTableWidgetItem(cari_tipi))
+            self.table.setItem(row, 4, QTableWidgetItem(f"{toplam_tutar_cari:.2f}"))
+
+            toplam_tutar += toplam_tutar_cari  # Toplam tutarı hesapla
+
+        # Alt bilgi kısmını güncelle
+        self.alt_bilgi.setText(
+            f"{len(cari_list)} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:.2f} TL"
+        )
 
     def stil_buton(self, text, icon_name, color):
         btn = QPushButton(icon(icon_name, color=color), text)

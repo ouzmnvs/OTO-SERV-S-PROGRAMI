@@ -1,11 +1,25 @@
 def load_cari_list():
+    """Veritabanından cari bilgilerini ve toplam tutarlarını yükler."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM CARİ")
-        cariler = cursor.fetchall()
-        return cariler  # Veriyi döndür
+        cursor.execute("""
+            SELECT 
+                c.id,
+                c.cari_kodu,
+                c.cari_ad_unvan,
+                c.cari_tipi,
+                c.borc,
+                c.tc_kimlik_no,
+                c.vergi_no,
+                c.cep_telefonu,
+                IFNULL(SUM(s.servis_tutar), 0) AS toplam_tutar
+            FROM CARİ c
+            LEFT JOIN SERVİSLER s ON c.cari_kodu = s.cari_kodu
+            GROUP BY c.id, c.cari_kodu, c.cari_ad_unvan, c.cari_tipi, c.borc, c.tc_kimlik_no, c.vergi_no, c.cep_telefonu
+        """)
+        return cursor.fetchall()
     except sqlite3.Error as e:
         print(f"Veritabanı hatası: {e}")
         return []
@@ -167,6 +181,31 @@ def load_open_services():
     finally:
         conn.close()
 
+def load_closed_services():
+    """Kapalı servisleri veritabanından yükler."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                s.id,
+                s.cari_kodu,
+                c.cari_ad_unvan,
+                s.plaka,
+                s.servis_tarihi,
+                s.servis_tutar
+            FROM SERVİSLER s
+            LEFT JOIN CARİ c ON s.cari_kodu = c.cari_kodu
+            WHERE s.servis_durumu = 'Kapalı'
+        """)
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
+    finally:
+        conn.close()
+
 def load_service_operations(servis_id):
     """Belirtilen servis ID'sine ait işlemleri döndürür."""
     import sqlite3
@@ -217,5 +256,22 @@ def load_car_details(plaka):
     except sqlite3.Error as e:
         print(f"Veritabanı hatası: {e}")
         return {}
+    finally:
+        conn.close()
+
+def close_service(servis_id):
+    """Belirtilen servis ID'sinin durumunu 'Kapalı' olarak günceller."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE SERVİSLER
+            SET servis_durumu = 'Kapalı'
+            WHERE id = ?
+        """, (servis_id,))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
     finally:
         conn.close()

@@ -90,7 +90,15 @@ class CariSelectListForm(QWidget):
         """Veritabanından gelen verileri tabloya yükler."""
         cariler = load_cari_list()  # Veritabanından verileri al
         self.table.setRowCount(len(cariler))  # Satır sayısını ayarla
-        for row, (id, cari_kodu, cari_ad_unvan, cari_tipi, borc,tc_kimlik_no, vergi_no,cep_telefonu) in enumerate(cariler):
+
+        for row, cari in enumerate(cariler):
+            # Sadece gerekli sütunları al
+            cari_kodu = cari[1]
+            cari_ad_unvan = cari[2]
+            cep_telefonu = cari[7]
+            cari_tipi = cari[3]
+
+            # Tabloya ekle
             self.table.setItem(row, 0, QTableWidgetItem(cari_kodu))
             self.table.setItem(row, 1, QTableWidgetItem(cari_ad_unvan))
             self.table.setItem(row, 2, QTableWidgetItem(cep_telefonu))
