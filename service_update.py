@@ -1,0 +1,206 @@
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
+    QHeaderView, QLineEdit, QComboBox, QGroupBox, QGridLayout, QTextEdit, QSizePolicy
+)
+from PyQt5.QtCore import Qt, QDateTime
+from qtawesome import icon
+import sys
+
+class ServiceUpdateForm(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("İş Emri Formu")
+        self.init_ui()
+
+    def init_ui(self):
+        # Ekran boyutlarına göre pencereyi orantılı ayarla
+        from PyQt5.QtWidgets import QDesktopWidget
+        ekran = QDesktopWidget().screenGeometry()
+        genislik = int(ekran.width() * 0.95)
+        yukseklik = int(ekran.height() * 0.90)
+        self.setFixedSize(genislik, yukseklik)
+        x = (ekran.width() - genislik) // 2
+        y = (ekran.height() - yukseklik) // 2 - 20
+        self.move(x, y)
+
+        ana_layout = QVBoxLayout()
+        ana_layout.setSpacing(10)
+
+        # Üst başlıklar
+        header_layout = QHBoxLayout()
+        lbl_arac = QLabel("Araç - Cari Bilgileri")
+        lbl_arac.setStyleSheet("font-size: 17px; font-weight: bold; background: #444; color: #fff; padding: 8px 18px; border-radius: 6px;")
+        lbl_islem = QLabel("İşlem ve Özet Bilgileri")
+        lbl_islem.setStyleSheet("font-size: 17px; font-weight: bold; background: #444; color: #fff; padding: 8px 18px; border-radius: 6px;")
+        header_layout.addWidget(lbl_arac, 2)
+        header_layout.addWidget(lbl_islem, 5)
+        ana_layout.addLayout(header_layout)
+
+        # Orta alan: Sol (Araç-Cari), Sağ (İşlem)
+        orta_layout = QHBoxLayout()
+        orta_layout.setSpacing(10)
+
+        # Sol panel (Araç ve Cari Bilgileri)
+        sol_panel = QVBoxLayout()
+        sol_panel.setSpacing(10)
+
+        group_cari = QGroupBox("Cari ve Araç Bilgilerini Giriniz")
+        cari_layout = QGridLayout()
+        cari_layout.setVerticalSpacing(8)
+        cari_layout.setHorizontalSpacing(6)
+
+        cari_layout.addWidget(QLabel("Cari Kodu"), 0, 0)
+        self.txt_cari_kodu = QLineEdit()
+        cari_layout.addWidget(self.txt_cari_kodu, 0, 1)
+
+        cari_layout.addWidget(QLabel("Cari Adı / Ünvanı"), 1, 0)
+        self.txt_cari_unvan = QLineEdit()
+        cari_layout.addWidget(self.txt_cari_unvan, 1, 1)
+
+        cari_layout.addWidget(QLabel("Telefon"), 2, 0)
+        self.txt_telefon = QLineEdit()
+        cari_layout.addWidget(self.txt_telefon, 2, 1)
+
+        cari_layout.addWidget(QLabel("Cari Tipi *"), 3, 0)
+        self.cmb_cari_tipi = QComboBox()
+        self.cmb_cari_tipi.addItems(["Bireysel", "Kurumsal"])
+        cari_layout.addWidget(self.cmb_cari_tipi, 3, 1)
+        btn_cari_sec = QPushButton(icon('fa5s.user-check', color='#1976d2'), "Seç")
+        btn_cari_sec.setMaximumWidth(60)
+        cari_layout.addWidget(btn_cari_sec, 3, 2)
+
+        cari_layout.addWidget(QLabel("Plaka *"), 4, 0)
+        self.txt_plaka = QLineEdit()
+        cari_layout.addWidget(self.txt_plaka, 4, 1)
+
+        cari_layout.addWidget(QLabel("Araç Tipi *"), 5, 0)
+        self.cmb_arac_tipi = QComboBox()
+        self.cmb_arac_tipi.addItems(["Otomobil", "Kamyonet", "Motosiklet"])
+        cari_layout.addWidget(self.cmb_arac_tipi, 5, 1)
+
+        cari_layout.addWidget(QLabel("Model Yılı"), 6, 0)
+        self.txt_model_yili = QLineEdit()
+        cari_layout.addWidget(self.txt_model_yili, 6, 1)
+
+        cari_layout.addWidget(QLabel("Marka"), 7, 0)
+        self.txt_marka = QLineEdit()
+        cari_layout.addWidget(self.txt_marka, 7, 1)
+
+        cari_layout.addWidget(QLabel("Model"), 8, 0)
+        self.txt_model = QLineEdit()
+        cari_layout.addWidget(self.txt_model, 8, 1)
+        btn_model_sec = QPushButton(icon('fa5s.car', color='#1976d2'), "Seç")
+        btn_model_sec.setMaximumWidth(60)
+        cari_layout.addWidget(btn_model_sec, 8, 2)
+
+        group_cari.setLayout(cari_layout)
+        sol_panel.addWidget(group_cari)
+
+        # Geçmiş servis kayıtları
+        group_gecmis = QGroupBox("Geçmiş Servis Kayıtları")
+        gecmis_layout = QVBoxLayout()
+        self.tbl_gecmis = QTableWidget(0, 3)
+        self.tbl_gecmis.setHorizontalHeaderLabels(["Tarih", "Tutar", "Durum"])
+        self.tbl_gecmis.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tbl_gecmis.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tbl_gecmis.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tbl_gecmis.setAlternatingRowColors(True)
+        self.tbl_gecmis.setFixedHeight(120)
+        gecmis_layout.addWidget(self.tbl_gecmis)
+        group_gecmis.setLayout(gecmis_layout)
+        sol_panel.addWidget(group_gecmis)
+
+        orta_layout.addLayout(sol_panel, 2)
+
+        # Sağ panel (İşlem ve özet)
+        sag_panel = QVBoxLayout()
+        sag_panel.setSpacing(10)
+
+        group_islem = QGroupBox("İşlem Bilgilerini Giriniz")
+        islem_layout = QHBoxLayout()
+        self.txt_islem_aciklama = QLineEdit()
+        self.txt_islem_aciklama.setPlaceholderText("İşlem Açıklaması")
+        self.txt_islem_tutar = QLineEdit()
+        self.txt_islem_tutar.setPlaceholderText("İşlem Tutarı")
+        self.txt_aciklama = QLineEdit()
+        self.txt_aciklama.setPlaceholderText("Açıklama")
+        self.txt_kdv_oran = QLineEdit()
+        self.txt_kdv_oran.setPlaceholderText("KDV Oranı (%)")
+        self.txt_kdv_oran.setText("20")
+        btn_ekle = QPushButton(icon('fa5s.plus-circle', color='#43a047'), "Ekle")
+        btn_ekle.setMinimumWidth(80)
+        islem_layout.addWidget(self.txt_islem_aciklama, 2)
+        islem_layout.addWidget(self.txt_islem_tutar, 1)
+        islem_layout.addWidget(self.txt_aciklama, 2)
+        islem_layout.addWidget(self.txt_kdv_oran, 1)
+        islem_layout.addWidget(btn_ekle, 1)
+        group_islem.setLayout(islem_layout)
+        sag_panel.addWidget(group_islem)
+
+        # İşlem tablosu
+        self.tbl_islemler = QTableWidget(0, 4)
+        self.tbl_islemler.setHorizontalHeaderLabels(["İşlem Açıklaması", "Tutar", "KDV Oranı", "Açıklama"])
+        self.tbl_islemler.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tbl_islemler.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tbl_islemler.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tbl_islemler.setAlternatingRowColors(True)
+        sag_panel.addWidget(self.tbl_islemler, 5)
+
+        orta_layout.addLayout(sag_panel, 5)
+        ana_layout.addLayout(orta_layout)
+
+        # Alt panel
+        alt_layout = QHBoxLayout()
+        alt_layout.setSpacing(10)
+
+        # İşlem özeti
+        group_ozet = QGroupBox("İşlem Özeti")
+        ozet_layout = QVBoxLayout()
+        self.lbl_islem_sayisi = QLabel("Toplam İşlem Sayısı\n0")
+        self.lbl_islem_sayisi.setStyleSheet("font-size: 14px;")
+        self.lbl_islem_tutar = QLabel("Toplam İşlem Tutarı\n0,00")
+        self.lbl_islem_tutar.setStyleSheet("font-size: 14px;")
+        ozet_layout.addWidget(self.lbl_islem_sayisi)
+        ozet_layout.addWidget(self.lbl_islem_tutar)
+        group_ozet.setLayout(ozet_layout)
+        group_ozet.setFixedWidth(140)
+        alt_layout.addWidget(group_ozet)
+
+        alt_layout.addStretch(1)
+
+        # Alt butonlar
+        btn_emri_olustur = QPushButton(icon('fa5s.save', color='#0288d1'), "EMRİ OLUŞTUR")
+        btn_emri_olustur.setMinimumHeight(40)
+        btn_islemleri_temizle = QPushButton(icon('fa5s.sync', color='#fbc02d'), "İŞLEMLERİ TEMİZLİ")
+        btn_islemleri_temizle.setMinimumHeight(40)
+        btn_pdf = QPushButton(icon('fa5s.file-pdf', color='#388e3c'), "PDF AKTAR")
+        btn_pdf.setMinimumHeight(40)
+        btn_kapat = QPushButton(icon('fa5s.times', color='#b71c1c'), "SAYFAYI KAPAT")
+        btn_kapat.setMinimumHeight(40)
+        alt_layout.addWidget(btn_emri_olustur)
+        alt_layout.addWidget(btn_islemleri_temizle)
+        alt_layout.addWidget(btn_pdf)
+        alt_layout.addWidget(btn_kapat)
+
+        ana_layout.addLayout(alt_layout)
+
+        # Alt bilgi (tarih/saat)
+        alt_bilgi_layout = QHBoxLayout()
+        alt_bilgi_layout.addStretch(1)
+        now = QDateTime.currentDateTime()
+        lbl_tarih = QLabel(now.toString("dd.MM.yyyy"))
+        lbl_saat = QLabel(now.toString("HH:mm"))
+        lbl_tarih.setStyleSheet("color: #444; font-size: 13px;")
+        lbl_saat.setStyleSheet("color: #444; font-size: 13px;")
+        alt_bilgi_layout.addWidget(lbl_tarih)
+        alt_bilgi_layout.addWidget(QLabel("|"))
+        alt_bilgi_layout.addWidget(lbl_saat)
+        ana_layout.addLayout(alt_bilgi_layout)
+
+        self.setLayout(ana_layout)
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    form = ServiceUpdateForm()
+    form.show()
+    sys.exit(app.exec_())

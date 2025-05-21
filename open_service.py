@@ -5,6 +5,7 @@ from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_open_services  # Açık servisleri yüklemek için fonksiyonu içe aktarın
+from service_update import ServiceUpdateForm  # En üste ekleyin
 
 class OpenServiceForm(QWidget):
     def __init__(self):
@@ -44,6 +45,8 @@ class OpenServiceForm(QWidget):
         buton_layout.addWidget(btn_kaydi_sil)
         buton_layout.addWidget(btn_detay_goruntule)
         buton_layout.addWidget(btn_sayfayi_kapat)
+
+        btn_kaydi_duzenle.clicked.connect(self.kaydi_duzenle)  # Bu satırı ekleyin
 
         ana_layout.addLayout(buton_layout)
 
@@ -135,6 +138,38 @@ class OpenServiceForm(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem(plaka))
             self.table.setItem(row, 4, QTableWidgetItem(tarih))
             self.table.setItem(row, 5, QTableWidgetItem(f"{tutar:.2f}"))
+
+    def kaydi_duzenle(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
+            return
+
+        # Tablo verilerini al
+        servis_id = self.table.item(selected_row, 0).text()
+        cari_kodu = self.table.item(selected_row, 1).text()
+        cari_unvan = self.table.item(selected_row, 2).text()
+        plaka = self.table.item(selected_row, 3).text()
+
+        # Veritabanından ek bilgileri yükle
+        from database_progress import load_car_details, load_cari_details
+        cari_details = load_cari_details(cari_kodu)
+        car_details = load_car_details(plaka)
+
+        # ServiceUpdateForm'u aç ve bilgileri aktar
+        self.update_form = ServiceUpdateForm()
+        self.update_form.txt_cari_kodu.setText(cari_kodu)
+        self.update_form.txt_cari_unvan.setText(cari_unvan)
+        self.update_form.txt_telefon.setText(cari_details.get("telefon", ""))
+        self.update_form.cmb_cari_tipi.setCurrentText(cari_details.get("cari_tipi", ""))
+        self.update_form.txt_plaka.setText(plaka)
+        self.update_form.cmb_arac_tipi.setCurrentText(car_details.get("arac_tipi", ""))
+        self.update_form.txt_model_yili.setText(str(car_details.get("model_yili", "")))
+        self.update_form.txt_marka.setText(car_details.get("marka", ""))
+        self.update_form.txt_model.setText(car_details.get("model", ""))
+
+        self.update_form.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

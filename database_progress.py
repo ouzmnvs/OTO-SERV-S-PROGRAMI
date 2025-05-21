@@ -166,3 +166,39 @@ def load_open_services():
         return []
     finally:
         conn.close()
+
+
+
+def load_cari_details(cari_kodu):
+    import sqlite3
+    """Belirtilen cari koduna ait bilgileri döndürür."""
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT cari_tipi, cep_telefonu FROM CARİ WHERE cari_kodu = ?", (cari_kodu,))
+        result = cursor.fetchone()
+        if result:
+            return {"cari_tipi": result[0], "telefon": result[1]}
+        return {}
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def load_car_details(plaka):
+    import sqlite3
+    """Belirtilen plakaya ait araç bilgilerini döndürür."""
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT arac_tipi, model_yili, marka, model FROM ARAÇLAR WHERE plaka = ?", (plaka,))
+        result = cursor.fetchone()
+        if result:
+            return {"arac_tipi": result[0], "model_yili": result[1], "marka": result[2], "model": result[3]}
+        return {}
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return {}
+    finally:
+        conn.close()
