@@ -150,14 +150,14 @@ def add_servis(cari_kodu, plaka, servis_tarihi, aciklama):
     conn.close()
     return servis_id
 
-def add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama):
+def add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama):
     import sqlite3
     conn = sqlite3.connect("oto_servis.db")
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO islemler (servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama)
-        VALUES (?, ?, ?, ?, ?)
-    """, (servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama))
+        INSERT INTO islemler (servis_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (servis_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama))
     conn.commit()
     conn.close()
     update_servis_tutar(servis_id)  # İşlem eklenince servis tutarını güncelle

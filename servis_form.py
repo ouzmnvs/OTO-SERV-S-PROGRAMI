@@ -291,8 +291,11 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.lbl_islem_sayisi.setStyleSheet("font-size: 15px; background: #fffde7; padding: 6px;")
         self.lbl_islem_tutar = QLabel("Toplam İşlem Tutarı\n0,00")
         self.lbl_islem_tutar.setStyleSheet("font-size: 15px; background: #e0f7fa; padding: 6px;")
+        self.lbl_kdv_tutar = QLabel("Toplam KDV Tutarı\n0,00")
+        self.lbl_kdv_tutar.setStyleSheet("font-size: 15px; background: #ffe0b2; padding: 6px;")
         ozet_layout.addWidget(self.lbl_islem_sayisi)
         ozet_layout.addWidget(self.lbl_islem_tutar)
+        ozet_layout.addWidget(self.lbl_kdv_tutar)
         ozet_group.setLayout(ozet_layout)
         alt_layout.addWidget(ozet_group, 1)
 
@@ -431,17 +434,28 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
     def guncelle_islem_ozeti(self):
-        """İşlem özetini günceller."""
         toplam_tutar = 0
+        toplam_kdv = 0
         toplam_islem = self.islem_table.rowCount()
 
         for row in range(toplam_islem):
             tutar_item = self.islem_table.item(row, 1)
+            kdv_tutari_item = self.islem_table.item(row, 3)
             if tutar_item:
                 toplam_tutar += float(tutar_item.text())
+            if kdv_tutari_item:
+                toplam_kdv += float(kdv_tutari_item.text())
 
         self.lbl_islem_sayisi.setText(f"Toplam İşlem Sayısı\n{toplam_islem}")
         self.lbl_islem_tutar.setText(f"Toplam İşlem Tutarı\n{toplam_tutar:.2f}")
+        # Toplam KDV tutarını da göster
+        if hasattr(self, "lbl_kdv_tutar"):
+            self.lbl_kdv_tutar.setText(f"Toplam KDV Tutarı\n{toplam_kdv:.2f}")
+        else:
+            self.lbl_kdv_tutar = QLabel(f"Toplam KDV Tutarı\n{toplam_kdv:.2f}")
+            self.lbl_kdv_tutar.setStyleSheet("font-size: 15px; background: #ffe0b2; padding: 6px;")
+            # Özet grubuna ekleyin
+            self.layout().itemAt(1).itemAt(0).widget().layout().addWidget(self.lbl_kdv_tutar)
 
     def emri_olustur(self):
         """Cari ve araç bilgileriyle servis oluşturur ve işlemleri bu servise bağlar."""
@@ -467,10 +481,12 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         servis_id = add_servis(cari_kodu, plaka, servis_tarihi, aciklama)
         for row in range(toplam_islem):
             islem_aciklama = self.islem_table.item(row, 0).text()
+            # KDV tutarını hesaplayıp add_islem'e gönderin
             islem_tutari = float(self.islem_table.item(row, 1).text())
             kdv_orani = float(self.islem_table.item(row, 2).text())
-            islem_aciklama_ek = self.islem_table.item(row, 4).text()  # 4. sütun: Açıklama
-            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, islem_aciklama_ek)
+            kdv_tutari = float(self.islem_table.item(row, 3).text())
+            islem_aciklama_ek = self.islem_table.item(row, 4).text()
+            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, islem_aciklama_ek)
 
         # Formu temizle
         self.islem_table.setRowCount(0)

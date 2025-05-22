@@ -154,10 +154,37 @@ class ServiceUpdateForm(QDialog):
         """)
         sag_panel.addWidget(lbl_sag_baslik)
 
+        # --- İşlem Ekleme Alanı ---
+        islem_ekle_layout = QHBoxLayout()
+        self.input_islem_aciklama = QLineEdit()
+        self.input_islem_aciklama.setPlaceholderText("İşlem Açıklaması")
+        self.input_islem_aciklama.setMinimumWidth(180)
+        self.input_islem_tutar = QLineEdit()
+        self.input_islem_tutar.setPlaceholderText("Tutar")
+        self.input_islem_tutar.setMinimumWidth(80)
+        self.input_islem_kdv = QLineEdit()
+        self.input_islem_kdv.setPlaceholderText("KDV (%)")
+        self.input_islem_kdv.setMinimumWidth(60)
+        self.input_islem_kdv.setText("20")  # Varsayılan olarak 20
+        self.input_islem_ek_aciklama = QLineEdit()
+        self.input_islem_ek_aciklama.setPlaceholderText("Ek Açıklama")
+        self.input_islem_ek_aciklama.setMinimumWidth(120)
+        btn_islem_ekle = QPushButton(icon('fa5s.plus', color='#43a047'), "İŞLEM EKLE")
+        btn_islem_ekle.setMinimumHeight(38)
+        btn_islem_ekle.clicked.connect(self.islem_ekle)
+
+        islem_ekle_layout.addWidget(self.input_islem_aciklama)
+        islem_ekle_layout.addWidget(self.input_islem_tutar)
+        islem_ekle_layout.addWidget(self.input_islem_kdv)
+        islem_ekle_layout.addWidget(self.input_islem_ek_aciklama)
+        islem_ekle_layout.addWidget(btn_islem_ekle)
+        sag_panel.addLayout(islem_ekle_layout)
+        # --- İşlem Ekleme Alanı Sonu ---
+
         # İşlem Listesi Tablosu
-        self.tbl_islemler = QTableWidget(0, 4)
+        self.tbl_islemler = QTableWidget(0, 5)
         self.tbl_islemler.setHorizontalHeaderLabels([
-            "İşlem Açıklaması", "Tutar", "KDV Oranı", "Açıklama"
+            "Açıklama", "Tutar", "KDV (%)", "KDV Tutarı", "Ek Açıklama"
         ])
         self.tbl_islemler.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tbl_islemler.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -308,6 +335,37 @@ class ServiceUpdateForm(QDialog):
 
     def pdf_aktar(self):
         QMessageBox.information(self, "PDF", "PDF oluşturma işlemi burada yapılacak.")
+
+    def islem_ekle(self):
+        aciklama = self.input_islem_aciklama.text().strip()
+        try:
+            tutar = float(self.input_islem_tutar.text().replace(",", "."))
+        except ValueError:
+            QMessageBox.warning(self, "Hatalı Giriş", "Tutar sayısal olmalı!")
+            return
+        try:
+            kdv = float(self.input_islem_kdv.text().replace(",", "."))
+        except ValueError:
+            QMessageBox.warning(self, "Hatalı Giriş", "KDV oranı sayısal olmalı!")
+            return
+        ek_aciklama = self.input_islem_ek_aciklama.text().strip()
+        if not aciklama:
+            QMessageBox.warning(self, "Eksik Bilgi", "İşlem açıklaması giriniz!")
+            return
+        kdv_tutari = tutar * kdv / 100
+        row = self.tbl_islemler.rowCount()
+        self.tbl_islemler.insertRow(row)
+        self.tbl_islemler.setItem(row, 0, QTableWidgetItem(aciklama))
+        self.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{tutar:.2f}"))
+        self.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{kdv:.2f}"))
+        self.tbl_islemler.setItem(row, 3, QTableWidgetItem(f"{kdv_tutari:.2f}"))
+        self.tbl_islemler.setItem(row, 4, QTableWidgetItem(ek_aciklama))
+        self.pending_operations.append((aciklama, tutar, kdv, kdv_tutari, ek_aciklama))
+        # Alanları temizle
+        self.input_islem_aciklama.clear()
+        self.input_islem_tutar.clear()
+        self.input_islem_kdv.setText("20")
+        self.input_islem_ek_aciklama.clear()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
