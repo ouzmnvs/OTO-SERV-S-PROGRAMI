@@ -294,14 +294,9 @@ class CloseServiceForm(QWidget):
         return btn
 
     def load_closed_services_to_table(self):
-        closed_services = load_closed_services()
+        closed_services = load_closed_services_with_kapanis_tutari()
         self.table.setRowCount(len(closed_services))
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            "Araç Plakası", "Araç Tipi", "Cari Kodu", "Cari Ünvanı", "Telefon", "Tarih", "Tutar"
-        ])
-
-        for row, (servis_id, plaka, arac_tipi, cari_kodu, cari_unvan, telefon, tarih, tutar) in enumerate(closed_services):
+        for row, (servis_id, arac_tipi, cari_kodu, cari_unvan, telefon, plaka, tarih, kapanis_tutar) in enumerate(closed_services):
             item_plaka = QTableWidgetItem(plaka or "")
             item_plaka.setData(Qt.UserRole, servis_id)
             self.table.setItem(row, 0, item_plaka)
@@ -310,7 +305,7 @@ class CloseServiceForm(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem(cari_unvan or ""))
             self.table.setItem(row, 4, QTableWidgetItem(telefon or ""))
             self.table.setItem(row, 5, QTableWidgetItem(tarih or ""))
-            self.table.setItem(row, 6, QTableWidgetItem(f"{tutar:.2f}"))
+            self.table.setItem(row, 6, QTableWidgetItem(f"{(kapanis_tutar or 0):,.2f}"))
 
     def odeme_al_ac(self):
         selected_row = self.table.currentRow()
@@ -320,9 +315,6 @@ class CloseServiceForm(QWidget):
 
         try:
             servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)
-            if servis_id is None:
-                servis_id = selected_row  # Geçici çözüm
-
             plaka = self.table.item(selected_row, 0).text()  # Plaka sütunu
             arac_tipi = self.table.item(selected_row, 1).text()
             cari_kodu = self.table.item(selected_row, 2).text()
@@ -330,7 +322,6 @@ class CloseServiceForm(QWidget):
             telefon = self.table.item(selected_row, 4).text()
             toplam_tutar = float(self.table.item(selected_row, 6).text().replace(",", "").replace(" TL", ""))
 
-            # Plaka bilgisini parametre olarak gönderin
             odeme_form = OdemeAlForm(servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, self, plaka=plaka)
             if odeme_form.exec_() == QDialog.Accepted:
                 self.load_closed_services_to_table()
@@ -353,6 +344,34 @@ class OpenServiceForm(QWidget):
         layout.addWidget(lbl)
 
         self.setLayout(layout)
+
+def load_closed_services_with_kapanis_tutari():
+    """Kapalı servisleri servis_kapanis_tutari ile birlikte döndürür."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                s.id,
+                a.arac_tipi,
+                s.cari_kodu,
+                c.cari_ad_unvan,
+                c.cep_telefonu,
+                s.plaka,
+                s.servis_tarihi,
+                s.servis_tutar
+            FROM SERVİSLER s
+            LEFT JOIN CARİ c ON s.cari_kodu = c.cari_kodu
+            LEFT JOIN ARAÇLAR a ON s.plaka = a.plaka
+            WHERE s.servis_durumu = 'Kapalı'
+        """)
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

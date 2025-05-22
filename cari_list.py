@@ -8,6 +8,7 @@ import sys
 from database_progress import load_cari_list  # Cari bilgilerini yüklemek için fonksiyonu içe aktarın
 from odeme_al import OdemeAlForm
 from add_cari import AddCariForm  # En üste ekleyin
+from cari_arac_kayitlari import AracListesiForm
 
 class CariListForm(QWidget):
     def __init__(self):
@@ -33,11 +34,15 @@ class CariListForm(QWidget):
         buton_layout = QHBoxLayout()
         buton_layout.setSpacing(10)
         btn_yeni_cari = self.stil_buton("YENİ CARİ EKLE", 'fa5s.plus-circle', '#43a047')
-        btn_yeni_cari.clicked.connect(self.yeni_cari_ekle_ac)  # <-- Bağlantı EKLENDİ
+        btn_yeni_cari.clicked.connect(self.yeni_cari_ekle_ac)
         buton_layout.addWidget(btn_yeni_cari)
         buton_layout.addWidget(self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1'))
         buton_layout.addWidget(self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c'))
-        buton_layout.addWidget(self.stil_buton("SERVİS HAREKETLERİ", 'fa5s.exchange-alt', '#455a64'))
+
+        btn_servis_hareket = self.stil_buton("SERVİS HAREKETLERİ", 'fa5s.exchange-alt', '#455a64')
+        btn_servis_hareket.clicked.connect(self.servis_hareketleri_ac)
+        buton_layout.addWidget(btn_servis_hareket)
+
         buton_layout.addWidget(self.stil_buton("ÖDEME AL", 'fa5s.money-bill-wave', '#fbc02d'))
         buton_layout.addWidget(self.stil_buton("ÖDEME YAP", 'fa5s.wallet', '#ff9800'))
         buton_layout.addWidget(self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c'))
@@ -187,6 +192,15 @@ class CariListForm(QWidget):
         self.add_cari_form = AddCariForm(dashboard_ref=self)
         self.add_cari_form.show()
         self.hide()
+
+    def servis_hareketleri_ac(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
+            return
+        cari_kodu = self.table.item(selected_row, 0).text()
+        arac_form = AracListesiForm(cari_kodu, self)
+        arac_form.exec_()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

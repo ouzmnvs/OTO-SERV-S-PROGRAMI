@@ -1,12 +1,13 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
-    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy
+    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, QMessageBox
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_car_list
 from add_car import AddCarForm  # En üste ekleyin
+from servis_kayitlari import ServisKayitlariForm
 
 class CarListForm(QWidget):
     def __init__(self, dashboard_ref=None):
@@ -38,7 +39,9 @@ class CarListForm(QWidget):
         buton_layout.addWidget(btn_yeni_arac)
         buton_layout.addWidget(self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1'))
         buton_layout.addWidget(self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c'))
-        buton_layout.addWidget(self.stil_buton("SERVİS KAYITLARI", 'fa5s.tools', '#455a64'))
+        btn_servis_kayitlari = self.stil_buton("SERVİS KAYITLARI", 'fa5s.book', '#455a64')
+        btn_servis_kayitlari.clicked.connect(self.servis_kayitlari_ac)
+        buton_layout.addWidget(btn_servis_kayitlari)
         buton_layout.addWidget(self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c'))
         buton_layout.addStretch()
         btn_kapat = self.stil_buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
@@ -153,6 +156,20 @@ class CarListForm(QWidget):
         self.add_car_form = AddCarForm(dashboard_ref=self, on_saved=tabloyu_guncelle)
         self.add_car_form.show()
         self.hide()
+
+    def servis_kayitlari_ac(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir araç seçin!")
+            return
+        cari_ad = self.table.item(selected_row, 1).text()
+        plaka = self.table.item(selected_row, 2).text()
+        arac_tipi = self.table.item(selected_row, 3).text()
+        model_yili = self.table.item(selected_row, 4).text()
+        marka = self.table.item(selected_row, 5).text()
+        model = self.table.item(selected_row, 6).text()
+        form = ServisKayitlariForm(cari_ad, plaka, arac_tipi, model_yili, marka, model, self)
+        form.exec_()
 
 # Dashboard'dan açarken:
 # self.car_list_form = CarListForm(self)

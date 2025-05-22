@@ -98,6 +98,29 @@ class OdemeAlForm(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
+def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka):
+    import sqlite3
+    from datetime import datetime
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+            INSERT INTO KASA (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama))
+        # Sadece kalan borcu güncelle
+        cursor.execute("""
+            UPDATE SERVİSLER
+            SET servis_tutar = servis_tutar - ?
+            WHERE id = ?
+        """, (tutar, servis_id))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Ödeme kaydedilemedi: {e}")
+    finally:
+        conn.close()
+
 if __name__ == "__main__":
     from PyQt5.QtWidgets import QApplication
     import sys

@@ -151,6 +151,67 @@ def load_car_list_by_cari(cari_kodu):
     finally:
         conn.close()
 
+def load_car_list_by_cari_with_last_closed_service(cari_kodu):
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model,
+                (
+                    SELECT s.servis_kapanis_tutari
+                    FROM SERVİSLER s
+                    WHERE s.plaka = a.plaka AND s.servis_durumu = 'Kapalı'
+                    ORDER BY s.servis_tarihi DESC
+                    LIMIT 1
+                ) as son_kapali_servis_tutar
+            FROM ARAÇLAR a
+            WHERE a.cari_kodu = ?
+        """, (cari_kodu,))
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
+    finally:
+        conn.close()
+
+def load_car_list_by_cari_with_last_closed_service_info(cari_kodu):
+    """
+    Her araç için son kapalı servisin kapanış tutarını ve tarihini döndürür.
+    Dönüş: [(plaka, arac_tipi, model_yili, marka, model, son_kapali_servis_tutar, son_kapali_servis_tarihi), ...]
+    """
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model,
+                (
+                    SELECT s.servis_kapanis_tutari
+                    FROM SERVİSLER s
+                    WHERE s.plaka = a.plaka AND s.servis_durumu = 'Kapalı'
+                    ORDER BY s.servis_tarihi DESC
+                    LIMIT 1
+                ) as son_kapali_servis_tutar,
+                (
+                    SELECT s.servis_tarihi
+                    FROM SERVİSLER s
+                    WHERE s.plaka = a.plaka AND s.servis_durumu = 'Kapalı'
+                    ORDER BY s.servis_tarihi DESC
+                    LIMIT 1
+                ) as son_kapali_servis_tarihi
+            FROM ARAÇLAR a
+            WHERE a.cari_kodu = ?
+        """, (cari_kodu,))
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
+    finally:
+        conn.close()
+
 def load_open_services():
     """Servis durumu 'Açık' olan servisleri yükler."""
     import sqlite3
@@ -182,7 +243,7 @@ def load_open_services():
         conn.close()
 
 def load_closed_services():
-    """Kapalı servisleri veritabanından yükler."""
+    """Kapalı servisleri veritabanından yükler (araç_tipi ve telefon dahil)."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
@@ -190,13 +251,16 @@ def load_closed_services():
         cursor.execute("""
             SELECT 
                 s.id,
+                a.arac_tipi,
                 s.cari_kodu,
                 c.cari_ad_unvan,
+                c.cep_telefonu,
                 s.plaka,
                 s.servis_tarihi,
                 s.servis_tutar
             FROM SERVİSLER s
             LEFT JOIN CARİ c ON s.cari_kodu = c.cari_kodu
+            LEFT JOIN ARAÇLAR a ON s.plaka = a.plaka
             WHERE s.servis_durumu = 'Kapalı'
         """)
         return cursor.fetchall()
@@ -260,16 +324,20 @@ def load_car_details(plaka):
         conn.close()
 
 def close_service(servis_id):
-    """Belirtilen servis ID'sinin durumunu 'Kapalı' olarak günceller."""
+    """Servisi kapatır ve kapanış tutarını kaydeder."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
+        # Mevcut tutarı al
+        cursor.execute("SELECT servis_tutar FROM SERVİSLER WHERE id = ?", (servis_id,))
+        tutar = cursor.fetchone()[0]
+        # Servisi kapalı yap ve kapanış tutarını kaydet
         cursor.execute("""
             UPDATE SERVİSLER
-            SET servis_durumu = 'Kapalı'
+            SET servis_durumu = 'Kapalı', servis_kapanis_tutari = ?
             WHERE id = ?
-        """, (servis_id,))
+        """, (tutar, servis_id))
         conn.commit()
     except sqlite3.Error as e:
         print(f"Veritabanı hatası: {e}")
@@ -300,19 +368,45 @@ def delete_islem_by_id(islem_id):
         conn.close()
 
 def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka):
-    """KASA tablosuna ödeme kaydeder."""
+    """KASA tablosuna ödeme kaydeder ve servis_tutarını düşer."""
     import sqlite3
     from datetime import datetime
     try:
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
         tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # KASA tablosuna ödeme kaydı ekle
         cursor.execute("""
             INSERT INTO KASA (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama))
+        # SERVİSLER tablosunda servis_tutarı düş
+        cursor.execute("""
+            UPDATE SERVİSLER
+            SET servis_tutar = servis_tutar - ?
+            WHERE id = ?
+        """, (tutar, servis_id))
         conn.commit()
     except sqlite3.Error as e:
         print(f"Ödeme kaydedilemedi: {e}")
+    finally:
+        conn.close()
+
+def load_servis_kayitlari_by_plaka(plaka):
+    """Belirtilen plakaya ait KAPALI servis kayıtlarını (tarih, kapanış_tutarı, durum) döndürür."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT servis_tarihi, servis_kapanis_tutari, servis_durumu
+            FROM SERVİSLER
+            WHERE plaka = ? AND servis_durumu = 'Kapalı'
+            ORDER BY servis_tarihi ASC
+        """, (plaka,))
+        return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"Veritabanı hatası: {e}")
+        return []
     finally:
         conn.close()
