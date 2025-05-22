@@ -5,10 +5,21 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from database_progress import load_cari_list  # Cari bilgilerini yüklemek için fonksiyonu içe aktarın
-from odeme_al import OdemeAlForm
+from database_progress import load_cari_list_for_table  # Cari bilgilerini yüklemek için fonksiyonu içe aktarın
+# from odeme_al import OdemeAlForm
 from add_cari import AddCariForm  # En üste ekleyin
-from cari_arac_kayitlari import AracListesiForm
+from edit_cari import EditCariForm
+# from cari_arac_kayitlari import AracListesiForm
+import sqlite3
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+from PyQt5.QtWidgets import QFileDialog
+import datetime
+import os
 
 class CariListForm(QWidget):
     def __init__(self):
@@ -36,16 +47,22 @@ class CariListForm(QWidget):
         btn_yeni_cari = self.stil_buton("YENİ CARİ EKLE", 'fa5s.plus-circle', '#43a047')
         btn_yeni_cari.clicked.connect(self.yeni_cari_ekle_ac)
         buton_layout.addWidget(btn_yeni_cari)
-        buton_layout.addWidget(self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1'))
-        buton_layout.addWidget(self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c'))
+        btn_duzenle = self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1')
+        btn_duzenle.clicked.connect(self.kaydi_duzenle_ac)
+        buton_layout.addWidget(btn_duzenle)
+        btn_sil = self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c')
+        btn_sil.clicked.connect(self.kaydi_sil_ac)
+        buton_layout.addWidget(btn_sil)
 
         btn_servis_hareket = self.stil_buton("SERVİS HAREKETLERİ", 'fa5s.exchange-alt', '#455a64')
-        btn_servis_hareket.clicked.connect(self.servis_hareketleri_ac)
+        # btn_servis_hareket.clicked.connect(self.servis_hareketleri_ac)
         buton_layout.addWidget(btn_servis_hareket)
 
-        buton_layout.addWidget(self.stil_buton("ÖDEME AL", 'fa5s.money-bill-wave', '#fbc02d'))
-        buton_layout.addWidget(self.stil_buton("ÖDEME YAP", 'fa5s.wallet', '#ff9800'))
-        buton_layout.addWidget(self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c'))
+        # buton_layout.addWidget(self.stil_buton("ÖDEME AL", 'fa5s.money-bill-wave', '#fbc02d'))
+        # buton_layout.addWidget(self.stil_buton("ÖDEME YAP", 'fa5s.wallet', '#ff9800'))
+        btn_pdf = self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
+        btn_pdf.clicked.connect(self.pdf_aktar)
+        buton_layout.addWidget(btn_pdf)
         buton_layout.addStretch()
         btn_kapat = self.stil_buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
         btn_kapat.clicked.connect(self.close)
@@ -95,12 +112,22 @@ class CariListForm(QWidget):
         ana_layout.addLayout(filtre_layout)
 
         # Tablo
-        self.table = QTableWidget(0, 5)
+        self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels([
-            "Cari Kodu", "Cari Adı / Ünvanı", "Telefon No", "Cari Tipi", "Toplam Tutar"
+            "Cari Kodu", "Cari Adı / Ünvanı", "Telefon No", "Cari Tipi", "Açıklama", "Toplam Tutar"
         ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)  # Cari Adı/Ünvanı geniş
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)  # Açıklama en geniş
+
+        # Diğer sütunları biraz daha geniş yap
+        header.setDefaultSectionSize(140)  # Tüm sütunlar için varsayılan genişlik
+        header.resizeSection(0, 150)  # Cari Kodu
+        header.resizeSection(1, 200)  # Cari Adı / Ünvanı
+        header.resizeSection(2, 140)  # Telefon No
+        header.resizeSection(3, 120)  # Cari Tipi
+        header.resizeSection(5, 120)  # Toplam Tutar
+
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -115,7 +142,7 @@ class CariListForm(QWidget):
                 font-weight: bold;
                 font-size: 15px;
                 border: 1px solid #bbb;
-                padding: 6px;
+                padding: 10px;
             }
         """)
 
@@ -133,22 +160,19 @@ class CariListForm(QWidget):
 
     def load_cari_list_to_table(self):
         """Veritabanından cari bilgilerini tabloya yükler."""
-        cari_list = load_cari_list()  # Veritabanından tüm cari bilgilerini al
-        self.table.setRowCount(len(cari_list))  # Tablo satır sayısını ayarla
+        cari_list = load_cari_list_for_table()  # (cari_kodu, cari_ad_unvan, cep_telefonu, cari_tipi, toplam_tutar, aciklama)
+        self.table.setRowCount(len(cari_list))
 
-        toplam_tutar = 0  # Toplam tutar hesaplamak için
-
-        for row, (id, cari_kodu, cari_ad_unvan, cari_tipi, borc, tc_kimlik_no, vergi_no, cep_telefonu, toplam_tutar_cari) in enumerate(cari_list):
-            # Tabloya gerekli alanları ekle
+        toplam_tutar = 0
+        for row, (cari_kodu, cari_ad_unvan, cep_telefonu, cari_tipi, toplam_tutar_cari, aciklama) in enumerate(cari_list):
             self.table.setItem(row, 0, QTableWidgetItem(cari_kodu))
             self.table.setItem(row, 1, QTableWidgetItem(cari_ad_unvan))
             self.table.setItem(row, 2, QTableWidgetItem(cep_telefonu))
             self.table.setItem(row, 3, QTableWidgetItem(cari_tipi))
-            self.table.setItem(row, 4, QTableWidgetItem(f"{toplam_tutar_cari:.2f}"))
+            self.table.setItem(row, 5, QTableWidgetItem(f"{toplam_tutar_cari:.2f}"))
+            self.table.setItem(row, 4, QTableWidgetItem(aciklama))
+            toplam_tutar += toplam_tutar_cari
 
-            toplam_tutar += toplam_tutar_cari  # Toplam tutarı hesapla
-
-        # Alt bilgi kısmını güncelle
         self.alt_bilgi.setText(
             f"{len(cari_list)} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:.2f} TL"
         )
@@ -173,7 +197,41 @@ class CariListForm(QWidget):
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return btn
 
-    def odeme_al(self):
+#     def odeme_al(self):
+#         selected_row = self.table.currentRow()
+#         if selected_row == -1:
+#             QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
+#             return
+
+#         cari_kodu = self.table.item(selected_row, 0).text()
+#         cari_ad_unvan = self.table.item(selected_row, 1).text()
+#         telefon = self.table.item(selected_row, 2).text()
+#         bakiye = float(self.table.item(selected_row, 4).text())
+
+#         odeme_form = OdemeAlForm(cari_kodu, cari_ad_unvan, telefon, bakiye, self)
+#         if odeme_form.exec_() == QDialog.Accepted:
+#             self.load_cari_list_to_table()
+
+    def yeni_cari_ekle_ac(self):
+        self.add_cari_form = AddCariForm()
+        self.add_cari_form.setWindowModality(Qt.ApplicationModal)
+        self.add_cari_form.setWindowFlag(Qt.Window)
+        self.add_cari_form.setWindowTitle("Yeni Cari Ekle")
+        # Modal olarak aç
+        if self.add_cari_form.exec_() == QDialog.Accepted:
+            self.load_cari_list_to_table()
+
+    def kaydi_duzenle_ac(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
+            return
+        cari_kodu = self.table.item(selected_row, 0).text()
+        dialog = EditCariForm(cari_kodu, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.load_cari_list_to_table()
+
+    def kaydi_sil_ac(self):
         selected_row = self.table.currentRow()
         if selected_row == -1:
             QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
@@ -181,26 +239,102 @@ class CariListForm(QWidget):
 
         cari_kodu = self.table.item(selected_row, 0).text()
         cari_ad_unvan = self.table.item(selected_row, 1).text()
-        telefon = self.table.item(selected_row, 2).text()
-        bakiye = float(self.table.item(selected_row, 4).text())
+        cep_telefonu = self.table.item(selected_row, 2).text()
 
-        odeme_form = OdemeAlForm(cari_kodu, cari_ad_unvan, telefon, bakiye, self)
-        if odeme_form.exec_() == QDialog.Accepted:
-            self.load_cari_list_to_table()
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Kaydı Sil")
+        msg.setText(
+            f"Cari Kodu: {cari_kodu}\n"
+            f"Cari Adı/Ünvanı: {cari_ad_unvan}\n"
+            f"Telefon: {cep_telefonu}\n\n"
+            "Bu cariyi silmek istediğinize emin misiniz?"
+        )
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(QMessageBox.No)
+        sonuc = msg.exec_()
 
-    def yeni_cari_ekle_ac(self):
-        self.add_cari_form = AddCariForm(dashboard_ref=self)
-        self.add_cari_form.show()
-        self.hide()
+        if sonuc == QMessageBox.Yes:
+            try:
+                conn = sqlite3.connect("oto_servis.db")
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM cariler WHERE cari_kodu = ?", (cari_kodu,))
+                conn.commit()
+                conn.close()
+                QMessageBox.information(self, "Başarılı", "Cari kaydı silindi.")
+                self.load_cari_list_to_table()
+            except Exception as e:
+                QMessageBox.critical(self, "Hata", f"Silme işlemi sırasında hata oluştu:\n{e}")
 
-    def servis_hareketleri_ac(self):
-        selected_row = self.table.currentRow()
-        if selected_row == -1:
-            QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
+    def pdf_aktar(self):
+        # Türkçe karakter desteği için font kaydı
+        font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+        pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+
+        # PDF dosya adı: {tarih}_cari_listesi.pdf
+        tarih = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+        default_name = f"{tarih}_cari_listesi.pdf"
+        path, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_name, "PDF Files (*.pdf)")
+        if not path:
             return
-        cari_kodu = self.table.item(selected_row, 0).text()
-        arac_form = AracListesiForm(cari_kodu, self)
-        arac_form.exec_()
+
+        # Tablo başlıkları ve veriler
+        headers = ["Cari Kodu", "Cari Adı / Ünvanı", "Telefon No", "Cari Tipi", "Açıklama", "Toplam Tutar"]
+        data = [headers]
+        for row in range(self.table.rowCount()):
+            data.append([
+                self.table.item(row, 0).text() if self.table.item(row, 0) else "",
+                self.table.item(row, 1).text() if self.table.item(row, 1) else "",
+                self.table.item(row, 2).text() if self.table.item(row, 2) else "",
+                self.table.item(row, 3).text() if self.table.item(row, 3) else "",
+                self.table.item(row, 4).text() if self.table.item(row, 4) else "",
+                self.table.item(row, 5).text() if self.table.item(row, 5) else "",
+            ])
+
+        # PDF oluştur
+        doc = SimpleDocTemplate(path, pagesize=A4)
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(name='Turkish', fontName='DejaVu', fontSize=12, leading=16))
+        styles.add(ParagraphStyle(name='TurkishTitle', fontName='DejaVu', fontSize=16, leading=20, alignment=1))
+
+        elements = []
+        elements.append(Paragraph("CARİ LİSTESİ", styles['TurkishTitle']))
+        elements.append(Spacer(1, 18))
+
+        t = Table(data, repeatRows=1, colWidths=[70, 120, 80, 70, 150, 70])
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'DejaVu'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+            ('GRID', (0, 0), (-1, -1), 0.7, colors.grey),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+
+        elements.append(Spacer(1, 18))
+        elements.append(Paragraph(f"Toplam Kayıt: {self.table.rowCount()}", styles['Turkish']))
+
+        try:
+            doc.build(elements)
+            QMessageBox.information(self, "PDF Aktarıldı", "Cari listesi başarıyla PDF olarak kaydedildi.")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulamadı:\n{e}")
+
+#     def servis_hareketleri_ac(self):
+#         selected_row = self.table.currentRow()
+#         if selected_row == -1:
+#             QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
+#             return
+#         cari_kodu = self.table.item(selected_row, 0).text()
+#         arac_form = AracListesiForm(cari_kodu, self)
+#         arac_form.exec_()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -36,8 +36,9 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         btn_aktar = self.stil_buton("Bilgileri Aktar", 'fa5s.mouse-pointer', '#1976d2')
         btn_aktar.clicked.connect(self.bilgileri_aktar)
         btn_iptal = self.stil_buton("İptal", 'fa5s.times', '#b71c1c')
+        btn_iptal.clicked.connect(self.reject)  # Modalı kapatır
         btn_yeni = self.stil_buton("Yeni Ekle", 'fa5s.plus-circle', '#43a047')
-        btn_yeni.clicked.connect(self.yeni_cari_ekle_ac)  # <-- Bu satırı ekleyin
+        btn_yeni.clicked.connect(self.yeni_cari_ekle_ac)
         buton_layout.addWidget(btn_aktar)
         buton_layout.addWidget(btn_iptal)
         buton_layout.addWidget(btn_yeni)
@@ -96,9 +97,9 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
         for row, cari in enumerate(cariler):
             # Sadece gerekli sütunları al
-            cari_kodu = cari[1]
-            cari_ad_unvan = cari[2]
-            cep_telefonu = cari[7]
+            cari_kodu = cari[0]
+            cari_ad_unvan = cari[1]
+            cep_telefonu = cari[2]
             cari_tipi = cari[3]
 
             # Tabloya ekle
@@ -141,13 +142,12 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             self.close()
 
     def yeni_cari_ekle_ac(self):
-        def tabloyu_guncelle():
-            self.load_data_to_table()
-        self.add_cari_form = AddCariForm(on_saved=tabloyu_guncelle)
-        self.add_cari_form.setWindowModality(Qt.ApplicationModal)
-        self.add_cari_form.show()
+        dialog = AddCariForm()
+        dialog.setWindowModality(Qt.ApplicationModal)
+        if dialog.exec_() == QDialog.Accepted:
+            self.load_data_to_table()  # Başarıyla eklenirse tabloyu güncelle
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     app = QApplication(sys.argv)
     form = CariSelectListForm()
     form.show()

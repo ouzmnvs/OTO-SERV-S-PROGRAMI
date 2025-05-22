@@ -1,16 +1,17 @@
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
-    QGroupBox, QComboBox, QGridLayout
+    QApplication, QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
+    QGroupBox, QComboBox, QGridLayout, QMessageBox
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
+import sqlite3
 
-class AddCariForm(QWidget):
+class AddCariForm(QDialog):
     def __init__(self, dashboard_ref=None, on_saved=None):
         super().__init__()
         self.dashboard_ref = dashboard_ref
-        self.on_saved = on_saved  # Callback fonksiyonu
+        self.on_saved = on_saved
         self.setWindowTitle("Cari Formu")
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
@@ -23,7 +24,6 @@ class AddCariForm(QWidget):
         ana_layout = QVBoxLayout()
         ana_layout.setSpacing(18)
 
-        # Ortak stil
         input_style = """
             QLineEdit, QComboBox {
                 font-size: 18px;
@@ -55,7 +55,6 @@ class AddCariForm(QWidget):
             }
         """
 
-        # Cari Bilgileri
         cari_group = QGroupBox("Cari Bilgilerini Giriniz")
         cari_group.setStyleSheet(group_style)
         cari_layout = QGridLayout()
@@ -63,7 +62,7 @@ class AddCariForm(QWidget):
         cari_layout.setHorizontalSpacing(10)
 
         # Cari Kodu
-        lbl_cari_kodu = QLabel("Cari Kodu")
+        lbl_cari_kodu = QLabel("Cari Kodu *")
         lbl_cari_kodu.setStyleSheet(label_style)
         cari_layout.addWidget(lbl_cari_kodu, 0, 0)
         self.cari_kodu = QLineEdit()
@@ -72,7 +71,7 @@ class AddCariForm(QWidget):
         cari_layout.addWidget(self.cari_kodu, 0, 1, 1, 2)
 
         # Cari Adı / Ünvanı
-        lbl_cari_unvan = QLabel("Cari Adı / Ünvanı")
+        lbl_cari_unvan = QLabel("Cari Adı / Ünvanı *")
         lbl_cari_unvan.setStyleSheet(label_style)
         cari_layout.addWidget(lbl_cari_unvan, 1, 0)
         self.cari_unvan = QLineEdit()
@@ -87,6 +86,7 @@ class AddCariForm(QWidget):
         self.tc_kimlik_no = QLineEdit()
         self.tc_kimlik_no.setStyleSheet(input_style)
         self.tc_kimlik_no.setMinimumHeight(36)
+        self.tc_kimlik_no.setMaxLength(11)
         cari_layout.addWidget(self.tc_kimlik_no, 2, 1, 1, 2)
 
         # Vergi No
@@ -105,6 +105,7 @@ class AddCariForm(QWidget):
         self.cep_telefonu = QLineEdit()
         self.cep_telefonu.setStyleSheet(input_style)
         self.cep_telefonu.setMinimumHeight(36)
+        self.cep_telefonu.setMaxLength(11)
         cari_layout.addWidget(self.cep_telefonu, 4, 1, 1, 2)
 
         # Cari Tipi
@@ -116,6 +117,15 @@ class AddCariForm(QWidget):
         self.cari_tipi.setMinimumHeight(36)
         self.cari_tipi.addItems(["Bireysel", "Kurumsal", "Diğer"])
         cari_layout.addWidget(self.cari_tipi, 5, 1, 1, 2)
+
+        # Açıklama
+        lbl_aciklama = QLabel("Açıklama")
+        lbl_aciklama.setStyleSheet(label_style)
+        cari_layout.addWidget(lbl_aciklama, 6, 0)
+        self.aciklama = QLineEdit()
+        self.aciklama.setStyleSheet(input_style)
+        self.aciklama.setMinimumHeight(36)
+        cari_layout.addWidget(self.aciklama, 6, 1, 1, 2)
 
         cari_group.setLayout(cari_layout)
 
@@ -133,11 +143,9 @@ class AddCariForm(QWidget):
         btn_layout.addWidget(kaydet_btn)
         btn_layout.addWidget(iptal_btn)
 
-        # Ana layouta ekle
         ana_layout.addWidget(cari_group)
         ana_layout.addStretch()
         ana_layout.addLayout(btn_layout)
-
         self.setLayout(ana_layout)
 
     def iptal_tiklandi(self):
@@ -146,39 +154,50 @@ class AddCariForm(QWidget):
             self.dashboard_ref.show()
 
     def kaydet_tiklandi(self):
-        # Formdaki bilgileri al
         cari_kodu = self.cari_kodu.text().strip()
         cari_unvan = self.cari_unvan.text().strip()
         tc_kimlik_no = self.tc_kimlik_no.text().strip()
         vergi_no = self.vergi_no.text().strip()
         cep_telefonu = self.cep_telefonu.text().strip()
         cari_tipi = self.cari_tipi.currentText().strip()
+        aciklama = self.aciklama.text().strip()
 
-        # Gerekli alanların doldurulup doldurulmadığını kontrol et
+        # Zorunlu alan kontrolü
         if not cari_kodu or not cari_unvan or not cari_tipi:
-            print("Lütfen gerekli alanları doldurun!")
+            QMessageBox.warning(self, "Eksik Bilgi", "Lütfen * ile işaretli alanları doldurun!")
             return
 
-        # Veritabanına ekle
+        # TC ve telefon sadece sayı olmalı
+        if tc_kimlik_no and not tc_kimlik_no.isdigit():
+            QMessageBox.warning(self, "Hatalı Giriş", "TC Kimlik No sadece rakamlardan oluşmalıdır!")
+            return
+        if cep_telefonu and not cep_telefonu.isdigit():
+            QMessageBox.warning(self, "Hatalı Giriş", "Cep Telefonu sadece rakamlardan oluşmalıdır!")
+            return
+
+        # Aynı cari kodu var mı kontrolü
         try:
-            import sqlite3
             conn = sqlite3.connect("oto_servis.db")
             cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM cariler WHERE cari_kodu = ?", (cari_kodu,))
+            if cursor.fetchone():
+                QMessageBox.warning(self, "Tekrarlı Kayıt", "Bu cari kodu zaten kayıtlı!")
+                return
+
             cursor.execute("""
-                INSERT INTO CARİ (cari_kodu, cari_ad_unvan, tc_kimlik_no, vergi_no, cep_telefonu, cari_tipi, borc)
+                INSERT INTO cariler (cari_kodu, cari_ad_unvan, cari_tipi, tc_kimlik_no, vergi_no, cep_telefonu, aciklama)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (cari_kodu, cari_unvan, tc_kimlik_no, vergi_no, cep_telefonu, cari_tipi, 0))  # Borç varsayılan olarak 0
+            """, (cari_kodu, cari_unvan, cari_tipi, tc_kimlik_no, vergi_no, cep_telefonu, aciklama))
             conn.commit()
-            print("Cari başarıyla eklendi!")
+            QMessageBox.information(self, "Başarılı", "Cari başarıyla eklendi!")
+            self.accept()  # Modalı kapat ve Accepted olarak dön
             if self.on_saved:
-                self.on_saved()  # Callback'i çağır
-            self.close()  # Formu kapat
+                self.on_saved()
+            self.close()
             if self.dashboard_ref:
                 self.dashboard_ref.show()
-        except sqlite3.IntegrityError as e:
-            print(f"Veritabanı hatası: {e}")
         except Exception as e:
-            print(f"Bir hata oluştu: {e}")
+            QMessageBox.critical(self, "Hata", f"Bir hata oluştu:\n{e}")
         finally:
             conn.close()
 
