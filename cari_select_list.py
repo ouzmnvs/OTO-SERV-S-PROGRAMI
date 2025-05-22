@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from database_progress import load_cari_list  # Veritabanı fonksiyonunu içe aktar
+from database_progress import load_cari_list_for_select  # Veritabanı fonksiyonunu içe aktar
 from add_cari import AddCariForm  # Satırın başına ekleyin
 
 class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
@@ -92,7 +92,7 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
     def load_data_to_table(self):
         """Veritabanından gelen verileri tabloya yükler."""
-        cariler = load_cari_list()  # Veritabanından verileri al
+        cariler = load_cari_list_for_select()  # Veritabanından verileri al
         self.table.setRowCount(len(cariler))  # Satır sayısını ayarla
 
         for row, cari in enumerate(cariler):
@@ -101,7 +101,7 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             cari_ad_unvan = cari[1]
             cep_telefonu = cari[2]
             cari_tipi = cari[3]
-
+            print(cari_tipi)
             # Tabloya ekle
             self.table.setItem(row, 0, QTableWidgetItem(cari_kodu))
             self.table.setItem(row, 1, QTableWidgetItem(cari_ad_unvan))

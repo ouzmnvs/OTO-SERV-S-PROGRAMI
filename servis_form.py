@@ -247,8 +247,10 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         sag_panel.addWidget(islem_group)
 
         # İşlem Listesi Tablosu
-        self.islem_table = QTableWidget(0, 4)  # Sütun sayısını 4'e çıkarıyoruz
-        self.islem_table.setHorizontalHeaderLabels(["İşlem Açıklaması", "Tutar", "KDV Oranı", "Açıklama"])  # "KDV Oranı" eklendi
+        self.islem_table = QTableWidget(0, 5)  # Sütun sayısını 5'e çıkarıyoruz
+        self.islem_table.setHorizontalHeaderLabels([
+            "İşlem Açıklaması", "Tutar", "KDV (%)", "KDV Tutarı", "Açıklama"
+        ])
         self.islem_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.islem_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.islem_table.setAlternatingRowColors(True)
@@ -295,7 +297,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         alt_layout.addWidget(ozet_group, 1)
 
         # Alt Butonlar
-        btn_emri_olustur = self._buton("EMRİ OLUŞTUR", 'fa5s.save', 'deepskyblue')
+        btn_emri_olustur = self._buton("İŞ EMRİ OLUŞTUR", 'fa5s.save', 'deepskyblue')
         btn_emri_olustur.clicked.connect(self.emri_olustur)
         btn_islemleri_temizle = self._buton("İŞLEMİ SİL", 'fa5s.sync', '#fbc02d')
         btn_islemleri_temizle.clicked.connect(self.islem_sil)  # <-- EKLENDİ
@@ -399,16 +401,19 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             return
 
         try:
-            # KDV oranını float'a dönüştür
+            # KDV oranını ve tutarı float'a dönüştür
             kdv_orani = float(kdv_orani)
+            islem_tutari_float = float(islem_tutari)
+            kdv_tutari = islem_tutari_float * kdv_orani / 100
 
             # İşlemi tabloya ekle
             row_count = self.islem_table.rowCount()
             self.islem_table.insertRow(row_count)
             self.islem_table.setItem(row_count, 0, QTableWidgetItem(islem_aciklama))
-            self.islem_table.setItem(row_count, 1, QTableWidgetItem(islem_tutari))
-            self.islem_table.setItem(row_count, 2, QTableWidgetItem(str(kdv_orani)))  # KDV Oranı sütununa ekleme
-            self.islem_table.setItem(row_count, 3, QTableWidgetItem(aciklama))
+            self.islem_table.setItem(row_count, 1, QTableWidgetItem(f"{islem_tutari_float:.2f}"))
+            self.islem_table.setItem(row_count, 2, QTableWidgetItem(f"{kdv_orani:.2f}"))
+            self.islem_table.setItem(row_count, 3, QTableWidgetItem(f"{kdv_tutari:.2f}"))
+            self.islem_table.setItem(row_count, 4, QTableWidgetItem(aciklama))
 
             # İşlem özetini güncelle
             self.guncelle_islem_ozeti()
@@ -421,7 +426,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
             print("İşlem başarıyla eklendi")
         except ValueError:
-            QMessageBox.warning(self, "Hata", "KDV Oranı geçerli bir sayı olmalıdır!")
+            QMessageBox.warning(self, "Hata", "KDV Oranı ve Tutar geçerli bir sayı olmalıdır!")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
@@ -442,7 +447,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         """Cari ve araç bilgileriyle servis oluşturur ve işlemleri bu servise bağlar."""
         cari_kodu = self.cari_kodu.text().strip()
         plaka = self.plaka.text().strip()
-        servis_tarihi = datetime.now().strftime("%d.%m.%Y")  # O anki tarihi al
+        servis_tarihi = datetime.now().strftime("%Y-%m-%d")  # Standart tarih formatı
         aciklama = "Servis oluşturuldu."  # Servis açıklaması
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
@@ -464,7 +469,8 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             islem_aciklama = self.islem_table.item(row, 0).text()
             islem_tutari = float(self.islem_table.item(row, 1).text())
             kdv_orani = float(self.islem_table.item(row, 2).text())
-            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, aciklama)
+            islem_aciklama_ek = self.islem_table.item(row, 4).text()  # 4. sütun: Açıklama
+            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, islem_aciklama_ek)
 
         # Formu temizle
         self.islem_table.setRowCount(0)
@@ -482,6 +488,9 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         # Bilgilendirme penceresini göster
         bilgi = BilgilendirmePenceresi(self)
         bilgi.exec_()
+
+        QMessageBox.information(self, "Başarılı", "Servis başarıyla oluşturuldu.")
+        self.accept()  # Formu başarılı şekilde kapat
 
     def islem_sil(self):
         """Seçili işlemi tablodan siler."""

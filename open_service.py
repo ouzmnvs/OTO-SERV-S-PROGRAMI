@@ -1,15 +1,16 @@
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox
+   QDialog, QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDialog
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_open_services
-from service_update import ServiceUpdateForm
+from service_update import ServiceUpdateForm  # En üste ekleyin
 from database_progress import close_service
 from servis_form import ServisForm  # <-- Doğru dosya adıyla import
 from add_cari import AddCariForm
-
+from database_progress import delete_service  # En üste ekle
+from database_progress import get_service_full_details
 
 class OpenServiceForm(QWidget):
     def __init__(self):
@@ -36,14 +37,14 @@ class OpenServiceForm(QWidget):
         buton_layout = QHBoxLayout()
         buton_layout.setSpacing(10)
 
-        btn_kaydi_onayla = self.stil_buton("KAYDI ONAYLA", 'fa5s.check-circle', '#43a047')
+        btn_servisi_kapat = self.stil_buton("SERVİSİ KAPAT", 'fa5s.check-circle', '#43a047')
         btn_yeni_servis = self.stil_buton("YENİ SERVİS GİRİŞİ", 'fa5s.plus-circle', '#0288d1')
         btn_kaydi_duzenle = self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#fbc02d')
         btn_kaydi_sil = self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c')
         btn_detay_goruntule = self.stil_buton("DETAY GÖRÜNTÜLE", 'fa5s.info-circle', '#455a64')
         btn_sayfayi_kapat = self.stil_buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
 
-        buton_layout.addWidget(btn_kaydi_onayla)
+        buton_layout.addWidget(btn_servisi_kapat)
         buton_layout.addWidget(btn_yeni_servis)
         buton_layout.addWidget(btn_kaydi_duzenle)
         buton_layout.addWidget(btn_kaydi_sil)
@@ -51,8 +52,9 @@ class OpenServiceForm(QWidget):
         buton_layout.addWidget(btn_sayfayi_kapat)
 
         btn_kaydi_duzenle.clicked.connect(self.kaydi_duzenle)  # Bu satırı ekleyin
-        btn_kaydi_onayla.clicked.connect(self.kaydi_onayla)  # Bu satırı ekleyin
+        btn_servisi_kapat.clicked.connect(self.servisi_kapat)  # Bu satırı ekleyin
         btn_yeni_servis.clicked.connect(self.yeni_servis_girisi)
+        btn_kaydi_sil.clicked.connect(self.kaydi_sil)  # Bu satırı ekle
 
         ana_layout.addLayout(buton_layout)
 
@@ -152,42 +154,21 @@ class OpenServiceForm(QWidget):
             QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
             return
 
-        # Tablo verilerini al
         servis_id = self.table.item(selected_row, 0).text()
-        cari_kodu = self.table.item(selected_row, 1).text()
-        cari_unvan = self.table.item(selected_row, 2).text()
-        plaka = self.table.item(selected_row, 3).text()
+        details = get_service_full_details(servis_id)
+        if not details:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Hata", "Servis detayları bulunamadı!")
+            return
 
-        # Veritabanından ek bilgileri yükle
-        from database_progress import load_car_details, load_cari_details, load_service_operations
-        cari_details = load_cari_details(cari_kodu)
-        car_details = load_car_details(plaka)
-        service_operations = load_service_operations(servis_id)
+        # ServiceUpdateForm'u aç ve detayları aktar
+        self.servis_update_form = ServiceUpdateForm()
+        self.servis_update_form.set_service_details(details)
+        result = self.servis_update_form.exec_()
+        if result == QDialog.Accepted:
+            self.load_open_services_to_table()
 
-        # ServiceUpdateForm'u aç ve bilgileri aktar
-        self.update_form = ServiceUpdateForm()
-        self.update_form.txt_cari_kodu.setText(cari_kodu)
-        self.update_form.txt_cari_unvan.setText(cari_unvan)
-        self.update_form.txt_telefon.setText(cari_details.get("telefon", ""))
-        self.update_form.cmb_cari_tipi.setCurrentText(cari_details.get("cari_tipi", ""))
-        self.update_form.txt_plaka.setText(plaka)
-        self.update_form.cmb_arac_tipi.setCurrentText(car_details.get("arac_tipi", ""))
-        self.update_form.txt_model_yili.setText(str(car_details.get("model_yili", "")))
-        self.update_form.txt_marka.setText(car_details.get("marka", ""))
-        self.update_form.txt_model.setText(car_details.get("model", ""))
-        self.update_form.servis_id = int(servis_id)  # Servis ID'sini aktar
-
-        # İşlemleri işlemler tablosuna ekle
-        self.update_form.tbl_islemler.setRowCount(len(service_operations))
-        for row, (id,islem_aciklama, islem_tutari, kdv_orani, aciklama) in enumerate(service_operations):
-            self.update_form.tbl_islemler.setItem(row, 0, QTableWidgetItem(islem_aciklama))
-            self.update_form.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{islem_tutari:.2f}"))
-            self.update_form.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{kdv_orani:.2f}"))
-            self.update_form.tbl_islemler.setItem(row, 3, QTableWidgetItem(aciklama))
-
-        self.update_form.show()
-
-    def kaydi_onayla(self):
+    def servisi_kapat(self):
         selected_row = self.table.currentRow()
         if selected_row == -1:
             from PyQt5.QtWidgets import QMessageBox
@@ -208,7 +189,25 @@ class OpenServiceForm(QWidget):
 
     def yeni_servis_girisi(self):
         self.servis_form = ServisForm()
-        self.servis_form.show()
+        result = self.servis_form.exec_()  # Modal olarak aç
+        if result == QDialog.Accepted:
+            self.load_open_services_to_table()  # Yeni servis eklendiyse tabloyu güncelle
+
+    def kaydi_sil(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
+            return
+
+        servis_id = self.table.item(selected_row, 0).text()
+
+        from PyQt5.QtWidgets import QMessageBox
+        yanit = QMessageBox.question(self, "Onay", "Seçili servisi silmek istediğinize emin misiniz?", QMessageBox.Yes | QMessageBox.No)
+        if yanit == QMessageBox.Yes:
+            delete_service(servis_id)
+            self.load_open_services_to_table()
+            QMessageBox.information(self, "Başarılı", "Servis kaydı silindi.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

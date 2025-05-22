@@ -2,8 +2,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QDateEdit, QPushButton, QMessageBox
 )
 from PyQt5.QtCore import QDate
-from database_progress import odeme_al
-
+# from database_progress import odeme_al
 class OdemeAlForm(QDialog):
     def __init__(self, servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, parent=None, plaka=""):
         super().__init__(parent)
@@ -111,7 +110,7 @@ def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, p
         """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama))
         # Sadece kalan borcu güncelle
         cursor.execute("""
-            UPDATE SERVİSLER
+            UPDATE servisler
             SET servis_tutar = servis_tutar - ?
             WHERE id = ?
         """, (tutar, servis_id))

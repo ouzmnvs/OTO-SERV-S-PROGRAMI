@@ -9,17 +9,19 @@ import sys
 from cari_select_list import CariSelectListForm
 
 class AddCarForm(QDialog):
-    def __init__(self, dashboard_ref=None, on_saved=None):
-        super().__init__()
+    def __init__(self, cari_kodu=None, cari_unvani=None, parent=None, dashboard_ref=None, on_saved=None):
+        super().__init__(parent)
         self.dashboard_ref = dashboard_ref
         self.on_saved = on_saved
         self.setWindowTitle("Araç Ekleme Formu")
+        self.ruhsat_foto_path = ""
+        self.cari_kodu_param = cari_kodu
+        self.cari_unvani_param = cari_unvani
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
         genislik = int(ekran.width() * 0.56)   # Daha büyük pencere
         yukseklik = int(ekran.height() * 0.78)
         self.setFixedSize(genislik, yukseklik)
-        self.ruhsat_foto_path = ""
         self.init_ui()
 
     def init_ui(self):
@@ -86,6 +88,13 @@ class AddCarForm(QDialog):
         self.cari_unvani.setMinimumHeight(32)
         cari_layout.addWidget(self.cari_unvani, 1, 1, 1, 2)
         cari_group.setLayout(cari_layout)
+
+        # Cari kodu parametresi varsa otomatik doldur
+        if self.cari_kodu_param:
+            self.cari_kodu.setText(self.cari_kodu_param)
+            self.cari_kodu.setReadOnly(True)
+        if self.cari_unvani_param:
+            self.cari_unvani.setText(self.cari_unvani_param)
 
         # Araç Bilgileri Grubu
         arac_group = QGroupBox("Araç Bilgilerini Giriniz")
@@ -224,16 +233,23 @@ class AddCarForm(QDialog):
                 motor_hacmi, motor_gucu, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto
             ))
             conn.commit()
-            QMessageBox.information(self, "Başarılı", "Araç başarıyla eklendi!")
+            basarili_kayit = True
+        except Exception as e:
+            basarili_kayit = False
+            QMessageBox.critical(self, "Hata", f"Bir hata oluştu:\n{e}")
+        finally:
+            conn.close()
+
+        if basarili_kayit:  # Kayıt başarılıysa
+            QMessageBox.information(self, "Başarılı", "Araç başarıyla eklendi.")
+            self.accept()  # <-- Bu satır önemli!
             if self.on_saved:
                 self.on_saved()
             self.close()
             if self.dashboard_ref:
                 self.dashboard_ref.show()
-        except Exception as e:
-            QMessageBox.critical(self, "Hata", f"Bir hata oluştu:\n{e}")
-        finally:
-            conn.close()
+        else:
+            QMessageBox.warning(self, "Hata", "Araç eklenemedi.")
 
     def cari_sec_ac(self):
         self.cari_select_form = CariSelectListForm(parent_form=self)

@@ -6,6 +6,7 @@ from qtawesome import icon
 import sys
 from database_progress import load_closed_services  # Kapalı servisleri yüklemek için fonksiyonu içe aktarın
 from odeme_al import OdemeAlForm
+from database_progress import delete_service  # En üste ekleyin
 
 class CloseServiceForm(QWidget):
     def __init__(self):
@@ -31,22 +32,19 @@ class CloseServiceForm(QWidget):
         # Üst butonlar
         buton_layout = QHBoxLayout()
         buton_layout.setSpacing(10)
-        btn_odeme_al = self.stil_buton("ÖDEME AL", 'fa5s.money-bill', '#43a047')
-
-        btn_onayi_iptal_et = self.stil_buton("ONAYI İPTAL ET", 'fa5s.times-circle', '#b71c1c')
         btn_kaydi_sil = self.stil_buton("KAYDI SİL", 'fa5s.trash', '#f44336')
         btn_detay_goruntule = self.stil_buton("DETAY GÖRÜNTÜLE", 'fa5s.info-circle', '#455a64')
-        
+        btn_odeme_al = self.stil_buton("ÖDEME AL", 'fa5s.money-bill', '#43a047')
         btn_pdf_aktar = self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#0288d1')
         btn_sayfayi_kapat = self.stil_buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
 
-        buton_layout.addWidget(btn_onayi_iptal_et)
         buton_layout.addWidget(btn_kaydi_sil)
         buton_layout.addWidget(btn_detay_goruntule)
         buton_layout.addWidget(btn_odeme_al)
         buton_layout.addWidget(btn_pdf_aktar)
         buton_layout.addWidget(btn_sayfayi_kapat)
         btn_odeme_al.clicked.connect(self.odeme_al_ac)  # Doğru bağlantı
+        btn_kaydi_sil.clicked.connect(self.kaydi_sil)  # Kaydı sil fonksiyonunu bağla
         ana_layout.addLayout(buton_layout)
 
         # Filtre alanı
@@ -328,6 +326,18 @@ class CloseServiceForm(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
+    def kaydi_sil(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
+            return
+        servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)
+        yanit = QMessageBox.question(self, "Onay", "Seçili servisi silmek istediğinize emin misiniz?", QMessageBox.Yes | QMessageBox.No)
+        if yanit == QMessageBox.Yes:
+            delete_service(servis_id)
+            self.load_closed_services_to_table()
+            QMessageBox.information(self, "Başarılı", "Servis kaydı silindi.")
+
 class OpenServiceForm(QWidget):
     def __init__(self):
         super().__init__()
@@ -346,7 +356,7 @@ class OpenServiceForm(QWidget):
         self.setLayout(layout)
 
 def load_closed_services_with_kapanis_tutari():
-    """Kapalı servisleri servis_kapanis_tutari ile birlikte döndürür."""
+    """Kapalı servisleri servis_tutarı ile birlikte döndürür."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
@@ -361,10 +371,11 @@ def load_closed_services_with_kapanis_tutari():
                 s.plaka,
                 s.servis_tarihi,
                 s.servis_tutar
-            FROM SERVİSLER s
-            LEFT JOIN CARİ c ON s.cari_kodu = c.cari_kodu
-            LEFT JOIN ARAÇLAR a ON s.plaka = a.plaka
+            FROM servisler s
+            LEFT JOIN cariler c ON s.cari_kodu = c.cari_kodu
+            LEFT JOIN araclar a ON s.plaka = a.plaka
             WHERE s.servis_durumu = 'Kapalı'
+            ORDER BY s.id DESC
         """)
         return cursor.fetchall()
     except sqlite3.Error as e:

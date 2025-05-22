@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_car_list_by_cari  # Cari koduna göre araçları yüklemek için fonksiyonu içe aktarın
+from add_car import AddCarForm  # En üste ekle
 
 class CarSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
     def __init__(self, parent_form=None, cari_kodu=None):
@@ -35,9 +36,12 @@ class CarSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         buton_layout.setSpacing(10)
         btn_aktar = self.stil_buton("Bilgileri Aktar", 'fa5s.mouse-pointer', '#1976d2')
         btn_aktar.clicked.connect(self.bilgileri_aktar)
+        btn_yeni_arac = self.stil_buton("Yeni Araç", 'fa5s.car', '#388e3c')  # Yeni Araç butonu
+        btn_yeni_arac.clicked.connect(self.yeni_arac_ekle)
         btn_iptal = self.stil_buton("İptal", 'fa5s.times', '#b71c1c')
         btn_iptal.clicked.connect(self.close)
         buton_layout.addWidget(btn_aktar)
+        buton_layout.addWidget(btn_yeni_arac)
         buton_layout.addWidget(btn_iptal)
         ana_layout.addLayout(buton_layout)
 
@@ -118,6 +122,13 @@ class CarSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             if hasattr(self.parent_form, 'set_arac_bilgileri'):
                 self.parent_form.set_arac_bilgileri(plaka, arac_tipi, model_yili, marka, model)
             self.close()
+
+    def yeni_arac_ekle(self):
+        # Yeni araç ekleme formunu aç
+        form = AddCarForm(cari_kodu=self.cari_kodu, parent=self)
+        result = form.exec_()
+        if result == QDialog.Accepted:
+            self.load_data_to_table()  # Başarılıysa tabloyu güncelle
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

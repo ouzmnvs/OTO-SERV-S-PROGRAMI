@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS islemler (
     islem_aciklama TEXT NOT NULL,
     islem_tutari REAL NOT NULL,
     kdv_orani REAL DEFAULT 20,
+    kdv_tutari REAL,
     aciklama TEXT,
     FOREIGN KEY (servis_id) REFERENCES servisler (id) ON DELETE CASCADE
 )

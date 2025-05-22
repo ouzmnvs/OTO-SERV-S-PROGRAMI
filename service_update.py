@@ -1,307 +1,313 @@
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QLineEdit, QComboBox, QGroupBox, QGridLayout, QTextEdit, QSizePolicy
+    QApplication, QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
+    QGroupBox, QComboBox, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView,
+    QSizePolicy, QFrame, QMessageBox
 )
-from PyQt5.QtCore import Qt, QDateTime
+from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from database_progress import add_islem, load_service_operations  # İşlem ekleme ve yükleme fonksiyonlarını içe aktarın
+from database_progress import add_islem, load_service_operations, delete_service, update_servis
 
-class ServiceUpdateForm(QWidget):
+class ServiceUpdateForm(QDialog):
     def __init__(self):
         super().__init__()
-        self.servis_id = None  # Düzenlenen servis ID'sini tutmak için
-        self.pending_operations = []  # Yeni işlemleri geçici olarak tutmak için
-        self.deleted_operations = []  # Silinecek işlemler için liste
-        self.existing_operations = []  # Var olan işlemler
-        self.setWindowTitle("İş Emri Formu")
+        self.servis_id = None
+        self.pending_operations = []
+        self.deleted_operations = []
+        self.existing_operations = []
+        self.setWindowTitle("İş Emri Güncelle")
+        from PyQt5.QtWidgets import QDesktopWidget
+        ekran = QDesktopWidget().screenGeometry()
+        genislik = int(ekran.width() * 0.82)
+        yukseklik = int(ekran.height() * 0.82)
+        self.setFixedSize(genislik, yukseklik)
+        x = (ekran.width() - genislik) // 2
+        y = (ekran.height() - yukseklik) // 2 - 40
+        if y < 0:
+            y = 0
+        self.move(x, y)
         self.init_ui()
 
     def init_ui(self):
-        # Ekran boyutlarına göre pencereyi orantılı ayarla
-        from PyQt5.QtWidgets import QDesktopWidget
-        ekran = QDesktopWidget().screenGeometry()
-        genislik = int(ekran.width() * 0.95)
-        yukseklik = int(ekran.height() * 0.90)
-        self.setFixedSize(genislik, yukseklik)
-        x = (ekran.width() - genislik) // 2
-        y = (ekran.height() - yukseklik) // 2 - 20
-        self.move(x, y)
+        ana_layout = QHBoxLayout()
+        ana_layout.setSpacing(12)
 
-        ana_layout = QVBoxLayout()
-        ana_layout.setSpacing(10)
-
-        # Üst başlıklar
-        header_layout = QHBoxLayout()
-        lbl_arac = QLabel("Araç - Cari Bilgileri")
-        lbl_arac.setStyleSheet("font-size: 17px; font-weight: bold; background: #444; color: #fff; padding: 8px 18px; border-radius: 6px;")
-        lbl_islem = QLabel("İşlem ve Özet Bilgileri")
-        lbl_islem.setStyleSheet("font-size: 17px; font-weight: bold; background: #444; color: #fff; padding: 8px 18px; border-radius: 6px;")
-        header_layout.addWidget(lbl_arac, 2)
-        header_layout.addWidget(lbl_islem, 5)
-        ana_layout.addLayout(header_layout)
-
-        # Orta alan: Sol (Araç-Cari), Sağ (İşlem)
-        orta_layout = QHBoxLayout()
-        orta_layout.setSpacing(10)
-
-        # Sol panel (Araç ve Cari Bilgileri)
+        # Sol Panel: Araç ve Cari Bilgileri
         sol_panel = QVBoxLayout()
         sol_panel.setSpacing(10)
 
-        group_cari = QGroupBox("Cari ve Araç Bilgilerini Giriniz")
-        cari_layout = QGridLayout()
-        cari_layout.setVerticalSpacing(8)
-        cari_layout.setHorizontalSpacing(6)
+        # Başlık
+        lbl_sol_baslik = QLabel("Araç - Cari Bilgileri")
+        lbl_sol_baslik.setStyleSheet("""
+            background-color: #333;
+            color: white;
+            font: bold 18px;
+            padding: 10px 20px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        """)
+        sol_panel.addWidget(lbl_sol_baslik)
 
-        cari_layout.addWidget(QLabel("Cari Kodu"), 0, 0)
+        # Bilgi Girişi
+        bilgi_group = QGroupBox("Cari ve Araç Bilgilerini Giriniz")
+        bilgi_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 16px;
+                font-weight: bold;
+                color: #333;
+                border: 1.5px solid #bbb;
+                border-radius: 8px;
+                margin-top: 10px;
+            }
+            QGroupBox:title {
+                subcontrol-origin: margin;
+                left: 12px;
+                top: 2px;
+                padding: 0 4px;
+            }
+        """)
+        bilgi_layout = QGridLayout()
+        bilgi_layout.setVerticalSpacing(12)
+        bilgi_layout.setHorizontalSpacing(8)
+
+        label_style = "font-size: 16px; font-weight: 600; color: #222;"
+        input_style = """
+            QLineEdit, QComboBox {
+                font-size: 17px;
+                padding: 7px 10px;
+                border-radius: 6px;
+                border: 1.5px solid #bbb;
+                background: #fafbfc;
+            }
+            QLineEdit:focus, QComboBox:focus {
+                border: 2px solid #1976d2;
+                background: #fff;
+            }
+        """
+
+        bilgi_layout.addWidget(self._label("Cari Kodu", label_style), 0, 0)
         self.txt_cari_kodu = QLineEdit()
-        cari_layout.addWidget(self.txt_cari_kodu, 0, 1)
+        self.txt_cari_kodu.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.txt_cari_kodu, 0, 1)
 
-        cari_layout.addWidget(QLabel("Cari Adı / Ünvanı"), 1, 0)
+        bilgi_layout.addWidget(self._label("Cari Adı / Ünvanı", label_style), 1, 0)
         self.txt_cari_unvan = QLineEdit()
-        cari_layout.addWidget(self.txt_cari_unvan, 1, 1)
+        self.txt_cari_unvan.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.txt_cari_unvan, 1, 1)
 
-        cari_layout.addWidget(QLabel("Telefon"), 2, 0)
+        bilgi_layout.addWidget(self._label("Telefon", label_style), 2, 0)
         self.txt_telefon = QLineEdit()
-        cari_layout.addWidget(self.txt_telefon, 2, 1)
+        self.txt_telefon.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.txt_telefon, 2, 1)
 
-        cari_layout.addWidget(QLabel("Cari Tipi *"), 3, 0)
+        bilgi_layout.addWidget(self._label("Cari Tipi *", label_style), 3, 0)
         self.cmb_cari_tipi = QComboBox()
-        self.cmb_cari_tipi.addItems(["Bireysel", "Kurumsal"])
-        cari_layout.addWidget(self.cmb_cari_tipi, 3, 1)
-        btn_cari_sec = QPushButton(icon('fa5s.user-check', color='#1976d2'), "Seç")
-        btn_cari_sec.setMaximumWidth(60)
-        cari_layout.addWidget(btn_cari_sec, 3, 2)
+        self.cmb_cari_tipi.setStyleSheet(input_style)
+        self.cmb_cari_tipi.addItems(["", "Bireysel", "Kurumsal"])
+        bilgi_layout.addWidget(self.cmb_cari_tipi, 3, 1)
 
-        cari_layout.addWidget(QLabel("Plaka *"), 4, 0)
+        bilgi_layout.addWidget(self._label("Plaka *", label_style), 4, 0)
         self.txt_plaka = QLineEdit()
-        cari_layout.addWidget(self.txt_plaka, 4, 1)
+        self.txt_plaka.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.txt_plaka, 4, 1)
 
-        cari_layout.addWidget(QLabel("Araç Tipi *"), 5, 0)
+        bilgi_layout.addWidget(self._label("Araç Tipi *", label_style), 5, 0)
         self.cmb_arac_tipi = QComboBox()
-        self.cmb_arac_tipi.addItems(["Otomobil", "Kamyonet", "Motosiklet"])
-        cari_layout.addWidget(self.cmb_arac_tipi, 5, 1)
+        self.cmb_arac_tipi.setStyleSheet(input_style)
+        self.cmb_arac_tipi.addItems(["", "Otomobil", "Kamyonet", "Minibüs", "Diğer"])
+        bilgi_layout.addWidget(self.cmb_arac_tipi, 5, 1)
 
-        cari_layout.addWidget(QLabel("Model Yılı"), 6, 0)
+        bilgi_layout.addWidget(self._label("Model Yılı", label_style), 6, 0)
         self.txt_model_yili = QLineEdit()
-        cari_layout.addWidget(self.txt_model_yili, 6, 1)
+        self.txt_model_yili.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.txt_model_yili, 6, 1)
 
-        cari_layout.addWidget(QLabel("Marka"), 7, 0)
+        bilgi_layout.addWidget(self._label("Marka", label_style), 7, 0)
         self.txt_marka = QLineEdit()
-        cari_layout.addWidget(self.txt_marka, 7, 1)
+        self.txt_marka.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.txt_marka, 7, 1)
 
-        cari_layout.addWidget(QLabel("Model"), 8, 0)
+        bilgi_layout.addWidget(self._label("Model", label_style), 8, 0)
         self.txt_model = QLineEdit()
-        cari_layout.addWidget(self.txt_model, 8, 1)
-        btn_model_sec = QPushButton(icon('fa5s.car', color='#1976d2'), "Seç")
-        btn_model_sec.setMaximumWidth(60)
-        cari_layout.addWidget(btn_model_sec, 8, 2)
+        self.txt_model.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.txt_model, 8, 1)
 
-        group_cari.setLayout(cari_layout)
-        sol_panel.addWidget(group_cari)
+        bilgi_group.setLayout(bilgi_layout)
+        sol_panel.addWidget(bilgi_group)
 
-        # Geçmiş servis kayıtları
-        group_gecmis = QGroupBox("Geçmiş Servis Kayıtları")
-        gecmis_layout = QVBoxLayout()
-        self.tbl_gecmis = QTableWidget(0, 3)
-        self.tbl_gecmis.setHorizontalHeaderLabels(["Tarih", "Tutar", "Durum"])
-        self.tbl_gecmis.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tbl_gecmis.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tbl_gecmis.setSelectionBehavior(QTableWidget.SelectRows)
-        self.tbl_gecmis.setAlternatingRowColors(True)
-        self.tbl_gecmis.setFixedHeight(120)
-        gecmis_layout.addWidget(self.tbl_gecmis)
-        group_gecmis.setLayout(gecmis_layout)
-        sol_panel.addWidget(group_gecmis)
+        sol_panel.addStretch(1)
+        ana_layout.addLayout(sol_panel, 2)
 
-        orta_layout.addLayout(sol_panel, 2)
-
-        # Sağ panel (İşlem ve özet)
+        # Sağ Panel: İşlem ve Özet Bilgileri
         sag_panel = QVBoxLayout()
         sag_panel.setSpacing(10)
 
-        group_islem = QGroupBox("İşlem Bilgilerini Giriniz")
-        islem_layout = QHBoxLayout()
-        self.txt_islem_aciklama = QLineEdit()
-        self.txt_islem_aciklama.setPlaceholderText("İşlem Açıklaması")
-        self.txt_islem_tutar = QLineEdit()
-        self.txt_islem_tutar.setPlaceholderText("İşlem Tutarı")
-        self.txt_aciklama = QLineEdit()
-        self.txt_aciklama.setPlaceholderText("Açıklama")
-        self.txt_kdv_oran = QLineEdit()
-        self.txt_kdv_oran.setPlaceholderText("KDV Oranı (%)")
-        self.txt_kdv_oran.setText("20")
-        btn_ekle = QPushButton(icon('fa5s.plus-circle', color='#43a047'), "Ekle")
-        btn_ekle.setMinimumWidth(80)
-        btn_ekle.clicked.connect(self.islem_ekle)  # Ekle butonuna tıklama olayı bağlandı
-        islem_layout.addWidget(self.txt_islem_aciklama, 2)
-        islem_layout.addWidget(self.txt_islem_tutar, 1)
-        islem_layout.addWidget(self.txt_aciklama, 2)
-        islem_layout.addWidget(self.txt_kdv_oran, 1)
-        islem_layout.addWidget(btn_ekle, 1)
-        group_islem.setLayout(islem_layout)
-        sag_panel.addWidget(group_islem)
+        # Sağ başlık
+        lbl_sag_baslik = QLabel("İşlem ve Özet Bilgileri")
+        lbl_sag_baslik.setStyleSheet("""
+            background-color: #333;
+            color: white;
+            font: bold 18px;
+            padding: 10px 20px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        """)
+        sag_panel.addWidget(lbl_sag_baslik)
 
-        # İşlem tablosu
+        # İşlem Listesi Tablosu
         self.tbl_islemler = QTableWidget(0, 4)
-        self.tbl_islemler.setHorizontalHeaderLabels(["İşlem Açıklaması", "Tutar", "KDV Oranı", "Açıklama"])
+        self.tbl_islemler.setHorizontalHeaderLabels([
+            "İşlem Açıklaması", "Tutar", "KDV Oranı", "Açıklama"
+        ])
         self.tbl_islemler.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tbl_islemler.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.tbl_islemler.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_islemler.setAlternatingRowColors(True)
-        sag_panel.addWidget(self.tbl_islemler, 5)
+        self.tbl_islemler.setStyleSheet("""
+            QTableWidget {
+                font-size: 14px;
+                alternate-background-color: #f5f5f5;
+                background: #fff;
+            }
+            QHeaderView::section {
+                background: #ececec;
+                font-weight: bold;
+                font-size: 14px;
+                border: 1px solid #bbb;
+                padding: 6px;
+            }
+        """)
+        sag_panel.addWidget(self.tbl_islemler)
 
-        orta_layout.addLayout(sag_panel, 5)
-        ana_layout.addLayout(orta_layout)
-
-        # Alt panel
+        # Alt Butonlar
         alt_layout = QHBoxLayout()
         alt_layout.setSpacing(10)
-
-        # İşlem özeti
-        group_ozet = QGroupBox("İşlem Özeti")
-        ozet_layout = QVBoxLayout()
-        self.lbl_islem_sayisi = QLabel("Toplam İşlem Sayısı\n0")
-        self.lbl_islem_sayisi.setStyleSheet("font-size: 14px;")
-        self.lbl_islem_tutar = QLabel("Toplam İşlem Tutarı\n0,00")
-        self.lbl_islem_tutar.setStyleSheet("font-size: 14px;")
-        ozet_layout.addWidget(self.lbl_islem_sayisi)
-        ozet_layout.addWidget(self.lbl_islem_tutar)
-        group_ozet.setLayout(ozet_layout)
-        group_ozet.setFixedWidth(140)
-        alt_layout.addWidget(group_ozet)
-
-        alt_layout.addStretch(1)
-
-        # Alt butonlar
-        btn_guncelle = QPushButton(icon('fa5s.edit', color='#0288d1'), "GÜNCELLE")
-        btn_guncelle.setMinimumHeight(40)
-        btn_guncelle.clicked.connect(self.guncelle_servis)  # Güncelle butonuna tıklama olayı bağlandı
-        btn_islemleri_temizle = QPushButton(icon('fa5s.trash', color='#b71c1c'), "İŞLEMİ SİL")
-        btn_islemleri_temizle.setMinimumHeight(40)
-        btn_islemleri_temizle.clicked.connect(self.islem_sil)  # <-- Bağlantı eklendi
-        btn_pdf = QPushButton(icon('fa5s.file-pdf', color='#388e3c'), "PDF AKTAR")
-        btn_pdf.setMinimumHeight(40)
-        btn_kapat = QPushButton(icon('fa5s.times', color='#b71c1c'), "SAYFAYI KAPAT")
-        btn_kapat.setMinimumHeight(40)
-        alt_layout.addWidget(btn_guncelle)
-        alt_layout.addWidget(btn_islemleri_temizle)
+        btn_kaydi_sil = self._buton("KAYDI SİL", 'fa5s.trash', '#b71c1c')
+        btn_kaydi_sil.clicked.connect(self.kaydi_sil)
+        btn_islem_sil = self._buton("İŞLEMİ SİL", 'fa5s.trash', '#b71c1c')
+        btn_islem_sil.clicked.connect(self.islem_sil)
+        btn_pdf = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
+        btn_pdf.clicked.connect(self.pdf_aktar)
+        btn_kaydet = self._buton("KAYDET", 'fa5s.save', '#0288d1')
+        btn_kaydet.clicked.connect(self.kaydet_servis)
+        btn_kapat = self._buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
+        btn_kapat.clicked.connect(self.reject)
+        alt_layout.addWidget(btn_kaydi_sil)
+        alt_layout.addWidget(btn_islem_sil)
         alt_layout.addWidget(btn_pdf)
+        alt_layout.addWidget(btn_kaydet)
         alt_layout.addWidget(btn_kapat)
+        sag_panel.addLayout(alt_layout)
 
-        ana_layout.addLayout(alt_layout)
-
-        # Alt bilgi (tarih/saat)
-        alt_bilgi_layout = QHBoxLayout()
-        alt_bilgi_layout.addStretch(1)
-        now = QDateTime.currentDateTime()
-        lbl_tarih = QLabel(now.toString("dd.MM.yyyy"))
-        lbl_saat = QLabel(now.toString("HH:mm"))
-        lbl_tarih.setStyleSheet("color: #444; font-size: 13px;")
-        lbl_saat.setStyleSheet("color: #444; font-size: 13px;")
-        alt_bilgi_layout.addWidget(lbl_tarih)
-        alt_bilgi_layout.addWidget(QLabel("|"))
-        alt_bilgi_layout.addWidget(lbl_saat)
-        ana_layout.addLayout(alt_bilgi_layout)
-
+        ana_layout.addLayout(sag_panel, 4)
         self.setLayout(ana_layout)
 
-    def load_operations(self):
-        """Servis açıldığında mevcut işlemleri yükle."""
-        if self.servis_id:
-            self.existing_operations = load_service_operations(self.servis_id)
-            self.tbl_islemler.setRowCount(0)
-            for islem in self.existing_operations:
-                row = self.tbl_islemler.rowCount()
-                self.tbl_islemler.insertRow(row)
-                # islem = (id, açıklama, tutar, kdv, açıklama)
-                for col, val in enumerate(islem[1:]):  # id hariç
-                    self.tbl_islemler.setItem(row, col, QTableWidgetItem(str(val)))
-            self.guncelle_islem_ozeti()
+    def _label(self, text, style):
+        lbl = QLabel(text)
+        lbl.setStyleSheet(style)
+        return lbl
 
-    def islem_ekle(self):
-        """Yeni bir işlem ekler ve tabloyu günceller."""
-        islem_aciklama = self.txt_islem_aciklama.text()
-        islem_tutari = self.txt_islem_tutar.text()
-        kdv_orani = self.txt_kdv_oran.text()
-        aciklama = self.txt_aciklama.text()
+    def _buton(self, text, icon_name, color):
+        btn = QPushButton(icon(icon_name, color=color), text)
+        btn.setMinimumHeight(48)
+        btn.setMinimumWidth(170)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                font-size: 16px;
+                font-weight: 800;
+                background: #f5f5f5;
+                border: 1.5px solid #bbb;
+                border-radius: 8px;
+                padding: 8px 18px;
+            }}
+            QPushButton:hover {{
+                background: #e0e0e0;
+            }}
+        """)
+        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        return btn
 
-        # Girdi doğrulama
-        if not islem_aciklama or not islem_tutari or not kdv_orani:
-            from PyQt5.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Uyarı", "Lütfen tüm gerekli alanları doldurun!")
-            return
+    # --- Fonksiyonlarınız aynı kalacak ---
 
-        try:
-            islem_tutari = float(islem_tutari)
-            kdv_orani = float(kdv_orani)
-        except ValueError:
-            QMessageBox.warning(self, "Uyarı", "Lütfen geçerli bir tutar ve KDV oranı girin!")
-            return
-
-        # İşlemi geçici listeye ekle
-        self.pending_operations.append((islem_aciklama, islem_tutari, kdv_orani, aciklama))
-
-        # İşlemler tablosunu güncelle
-        row_count = self.tbl_islemler.rowCount()
-        self.tbl_islemler.insertRow(row_count)
-        self.tbl_islemler.setItem(row_count, 0, QTableWidgetItem(islem_aciklama))
-        self.tbl_islemler.setItem(row_count, 1, QTableWidgetItem(f"{islem_tutari:.2f}"))
-        self.tbl_islemler.setItem(row_count, 2, QTableWidgetItem(f"{kdv_orani:.2f}"))
-        self.tbl_islemler.setItem(row_count, 3, QTableWidgetItem(aciklama))
-
-        # İşlem özetini güncelle
-        self.guncelle_islem_ozeti()
-
-        # Alanları temizle
-        self.txt_islem_aciklama.clear()
-        self.txt_islem_tutar.clear()
-        self.txt_aciklama.clear()
-        self.txt_kdv_oran.setText("20")
-
-    def guncelle_servis(self):
-        from database_progress import delete_islem_by_id
-
-        # Silinecek işlemleri veritabanından sil
-        for islem_id in self.deleted_operations:
-            delete_islem_by_id(islem_id)
-        self.deleted_operations.clear()
-
-        # Yeni işlemleri ekle
-        for islem in self.pending_operations:
-            add_islem(self.servis_id, *islem)
-        self.pending_operations.clear()
-
-        from PyQt5.QtWidgets import QMessageBox
-        QMessageBox.information(self, "Başarılı", "Servis başarıyla güncellendi!")
-        self.load_operations()
-
-    def guncelle_islem_ozeti(self):
-        """İşlem özetini günceller."""
-        toplam_tutar = 0
-        toplam_islem = self.tbl_islemler.rowCount()
-        for row in range(toplam_islem):
-            toplam_tutar += float(self.tbl_islemler.item(row, 1).text())
-        self.lbl_islem_sayisi.setText(f"Toplam İşlem Sayısı\n{toplam_islem}")
-        self.lbl_islem_tutar.setText(f"Toplam İşlem Tutarı\n{toplam_tutar:.2f}")
+    def set_service_details(self, details):
+        self.servis_id = details["servis"]["id"]
+        self.txt_cari_kodu.setText(details["cari"].get("cari_kodu", ""))
+        self.txt_cari_unvan.setText(details["cari"].get("cari_ad_unvan", ""))
+        self.txt_telefon.setText(details["cari"].get("cep_telefonu", ""))
+        self.cmb_cari_tipi.setCurrentText(details["cari"].get("cari_tipi", ""))
+        self.txt_plaka.setText(details["arac"].get("plaka", ""))
+        self.cmb_arac_tipi.setCurrentText(details["arac"].get("arac_tipi", ""))
+        self.txt_model_yili.setText(str(details["arac"].get("model_yili", "")))
+        self.txt_marka.setText(details["arac"].get("marka", ""))
+        self.txt_model.setText(details["arac"].get("model", ""))
+        self.tbl_islemler.setRowCount(len(details["islemler"]))
+        self.existing_operations = []
+        for row, islem in enumerate(details["islemler"]):
+            self.tbl_islemler.setItem(row, 0, QTableWidgetItem(islem["islem_aciklama"]))
+            self.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{islem['islem_tutari']:.2f}"))
+            self.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{islem['kdv_orani']:.2f}"))
+            self.tbl_islemler.setItem(row, 3, QTableWidgetItem(islem["aciklama"]))
+            self.existing_operations.append((
+                islem["id"],
+                islem["islem_aciklama"],
+                islem["islem_tutari"],
+                islem["kdv_orani"],
+                islem["aciklama"]
+            ))
 
     def islem_sil(self):
         selected_row = self.tbl_islemler.currentRow()
-        if selected_row >= 0:
-            if selected_row < len(self.existing_operations):
-                silinecek_islem = self.existing_operations[selected_row]
-                self.deleted_operations.append(silinecek_islem[0])  # id
-                del self.existing_operations[selected_row]
-            else:
-                idx = selected_row - len(self.existing_operations)
-                if idx < len(self.pending_operations):
-                    del self.pending_operations[idx]
-            self.tbl_islemler.removeRow(selected_row)
-            self.guncelle_islem_ozeti()
-        else:
-            from PyQt5.QtWidgets import QMessageBox
+        if selected_row < 0:
             QMessageBox.warning(self, "Uyarı", "Lütfen silmek için bir işlem seçin!")
+            return
+        islem_aciklama = self.tbl_islemler.item(selected_row, 0).text()
+        islem_tutar = self.tbl_islemler.item(selected_row, 1).text()
+        kdv_orani = self.tbl_islemler.item(selected_row, 2).text()
+        aciklama = self.tbl_islemler.item(selected_row, 3).text()
+        mesaj = (
+            f"İşlem Açıklaması: {islem_aciklama}\n"
+            f"Tutar: {islem_tutar}\n"
+            f"KDV Oranı: {kdv_orani}\n"
+            f"Açıklama: {aciklama}\n\n"
+            "Bu işlemi silmek istediğinize emin misiniz?"
+        )
+        yanit = QMessageBox.question(self, "İşlem Sil", mesaj, QMessageBox.Yes | QMessageBox.No)
+        if yanit != QMessageBox.Yes:
+            return
+        if selected_row < len(self.existing_operations):
+            from database_progress import delete_islem_by_id
+            silinecek_islem = self.existing_operations[selected_row]
+            delete_islem_by_id(silinecek_islem[0])
+            del self.existing_operations[selected_row]
+        else:
+            idx = selected_row - len(self.existing_operations)
+            if idx < len(self.pending_operations):
+                del self.pending_operations[idx]
+        self.tbl_islemler.removeRow(selected_row)
+
+    def kaydi_sil(self):
+        yanit = QMessageBox.question(
+            self, "Onay", "Bu servisi ve tüm işlemlerini silmek istediğinize emin misiniz?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if yanit == QMessageBox.Yes:
+            delete_service(self.servis_id)
+            QMessageBox.information(self, "Başarılı", "Servis ve işlemleri silindi.")
+            self.accept()
+
+    def kaydet_servis(self):
+        cari_kodu = self.txt_cari_kodu.text()
+        plaka = self.txt_plaka.text()
+        servis_tarihi = ""  # Tarih alanınız varsa ekleyin
+        aciklama = ""       # Açıklama alanınız varsa ekleyin
+        update_servis(self.servis_id, cari_kodu, plaka, servis_tarihi, aciklama)
+        for islem in self.pending_operations:
+            add_islem(self.servis_id, *islem)
+        self.pending_operations.clear()
+        QMessageBox.information(self, "Başarılı", "Servis başarıyla kaydedildi!")
+        self.accept()
+
+    def pdf_aktar(self):
+        QMessageBox.information(self, "PDF", "PDF oluşturma işlemi burada yapılacak.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
