@@ -324,9 +324,8 @@ class ServiceUpdateForm(QDialog):
     def kaydet_servis(self):
         cari_kodu = self.txt_cari_kodu.text()
         plaka = self.txt_plaka.text()
-        servis_tarihi = ""  # Tarih alanınız varsa ekleyin
-        aciklama = ""       # Açıklama alanınız varsa ekleyin
-        update_servis(self.servis_id, cari_kodu, plaka, servis_tarihi, aciklama)
+        aciklama = ""  # Açıklama alanınız varsa ekleyin
+        update_servis(self.servis_id, cari_kodu, plaka, aciklama)
         for islem in self.pending_operations:
             add_islem(self.servis_id, *islem)
         self.pending_operations.clear()

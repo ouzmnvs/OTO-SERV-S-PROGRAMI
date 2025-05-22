@@ -291,14 +291,15 @@ def load_service_operations(servis_id):
     conn.close()
     return result
 
-def update_servis(servis_id, cari_kodu, plaka, servis_tarihi, aciklama):
+def update_servis(servis_id, cari_kodu, plaka, aciklama):
+    import sqlite3
     conn = sqlite3.connect("oto_servis.db")
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE servisler
-        SET cari_kodu = ?, plaka = ?, servis_tarihi = ?, aciklama = ?
+        SET cari_kodu = ?, plaka = ?, aciklama = ?
         WHERE id = ?
-    """, (cari_kodu, plaka, servis_tarihi, aciklama, servis_id))
+    """, (cari_kodu, plaka, aciklama, servis_id))
     conn.commit()
     conn.close()
 
