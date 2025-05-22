@@ -140,36 +140,19 @@ class ServisKayitlariForm(QDialog):
 
         # --- Bilgi Kutusu ---
         c.setFont("DejaVu", 10)
-        kutu_yukseklik = 32 * mm
+        kutu_yukseklik = 18 * mm
         c.setFillColor(colors.lightgrey)
         c.rect(15*mm, y - kutu_yukseklik + 5*mm, width-30*mm, kutu_yukseklik, fill=1, stroke=0)
         c.setFillColor(colors.black)
-        satir_aralik = 7 * mm
-
-        def yazdir_bilgi(x, y, label, value):
-            c.drawString(x, y, f"{label}: {value}")
-
-        # Cari Bilgileri
         y_kutu = y + kutu_yukseklik - 10*mm
-        yazdir_bilgi(20*mm, y_kutu, "Cari Bilgileri", "")
-        yazdir_bilgi(50*mm, y_kutu, "Cari Kodu", servis_bilgi.get('cari_kodu',''))
-        y_kutu -= satir_aralik
-        yazdir_bilgi(50*mm, y_kutu, "Cari Adı/Ünvanı", cari_bilgi.get('cari_ad_unvan',''))
-        y_kutu -= satir_aralik
-        yazdir_bilgi(50*mm, y_kutu, "Cari Tipi", cari_bilgi.get('cari_tipi',''))
-        y_kutu -= satir_aralik
-        yazdir_bilgi(50*mm, y_kutu, "Telefon", cari_bilgi.get('telefon',''))
 
-        # Araç Bilgileri
-        y_kutu = y + kutu_yukseklik - 10*mm
-        yazdir_bilgi(120*mm, y_kutu, "Araç Bilgileri", "")
-        yazdir_bilgi(150*mm, y_kutu, "Plaka", servis_bilgi.get('plaka',''))
-        y_kutu -= satir_aralik
-        yazdir_bilgi(150*mm, y_kutu, "Tip", arac_bilgi.get('arac_tipi',''))
-        y_kutu -= satir_aralik
-        yazdir_bilgi(150*mm, y_kutu, "Marka", arac_bilgi.get('marka',''))
-        y_kutu -= satir_aralik
-        yazdir_bilgi(150*mm, y_kutu, "Model", f"{arac_bilgi.get('model','')}  Yıl: {arac_bilgi.get('model_yili','')}")
+        # Cari ve Araç Bilgileri Tek Satırda
+        c.drawString(20*mm, y_kutu, f"Cari Kodu: {servis_bilgi.get('cari_kodu','')}")
+        c.drawString(55*mm, y_kutu, f"Cari Adı: {cari_bilgi.get('cari_ad_unvan','')}")
+        c.drawString(110*mm, y_kutu, f"Plaka: {servis_bilgi.get('plaka','')}")
+        c.drawString(140*mm, y_kutu, f"Model: {arac_bilgi.get('model','')}")
+        c.drawString(170*mm, y_kutu, f"Model Yılı: {arac_bilgi.get('model_yili','')}")
+        c.drawString(200*mm, y_kutu, f"Marka: {arac_bilgi.get('marka','')}")
 
         y = y - kutu_yukseklik - 5*mm
 
@@ -177,7 +160,14 @@ class ServisKayitlariForm(QDialog):
         c.setFont("DejaVu", 11)
         yazdir_bilgi(20*mm, y, "Servis ID", servis_id)
         c.setFont("DejaVu", 10)
-        yazdir_bilgi(60*mm, y, "Servis Tarihi", servis_bilgi.get('servis_tarihi',''))
+        # Servis tarihi veya kapanış tarihi
+        if servis_bilgi.get('servis_durumu', '') == 'Kapalı':
+            tarih_label = "Kapanış Tarihi"
+            tarih_value = servis_bilgi.get('servis_kapanis_tarihi', servis_bilgi.get('servis_tarihi', ''))
+        else:
+            tarih_label = "Servis Tarihi"
+            tarih_value = servis_bilgi.get('servis_tarihi', '')
+        yazdir_bilgi(60*mm, y, tarih_label, tarih_value)
         y -= 8
         aciklama = servis_bilgi.get('aciklama','')
         max_len = 90

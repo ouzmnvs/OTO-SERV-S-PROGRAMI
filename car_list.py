@@ -37,7 +37,9 @@ class CarListForm(QDialog):
         btn_yeni_arac = self.stil_buton("YENİ ARAÇ EKLE", 'fa5s.plus', '#1976d2')
         btn_yeni_arac.clicked.connect(self.yeni_arac_ekle_ac)  # <-- Bağlantı EKLENDİ
         buton_layout.addWidget(btn_yeni_arac)
-        buton_layout.addWidget(self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1'))
+        btn_duzenle = self.stil_buton("KAYDI DÜZENLE", 'fa5s.edit', '#0288d1')
+        btn_duzenle.clicked.connect(self.kaydi_duzenle_ac)
+        buton_layout.addWidget(btn_duzenle)
         btn_sil = self.stil_buton("KAYDI SİL", 'fa5s.trash', '#b71c1c')
         btn_sil.clicked.connect(self.kaydi_sil_ac)
         buton_layout.addWidget(btn_sil)
@@ -210,6 +212,42 @@ class CarListForm(QDialog):
                 self.load_data_to_table()
             except Exception as e:
                 QMessageBox.critical(self, "Hata", f"Silme işlemi sırasında hata oluştu:\n{e}")
+
+    def kaydi_duzenle_ac(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir araç seçin!")
+            return
+        # Seçili aracın bilgilerini al
+        cari_kodu = self.table.item(selected_row, 0).text()
+        cari_ad = self.table.item(selected_row, 1).text()
+        plaka = self.table.item(selected_row, 2).text()
+        arac_tipi = self.table.item(selected_row, 3).text()
+        model_yili = self.table.item(selected_row, 4).text()
+        marka = self.table.item(selected_row, 5).text()
+        model = self.table.item(selected_row, 6).text()
+        # AddCarForm'u düzenleme modunda aç
+        def tabloyu_guncelle():
+            self.load_data_to_table()
+        self.add_car_form = AddCarForm(
+            dashboard_ref=self,
+            on_saved=tabloyu_guncelle,
+            edit_mode=True,
+            car_data={
+                "cari_kodu": cari_kodu,
+                "cari_ad": cari_ad,
+                "plaka": plaka,
+                "arac_tipi": arac_tipi,
+                "model_yili": model_yili,
+                "marka": marka,
+                "model": model
+            }
+        )
+        self.add_car_form.setWindowModality(Qt.ApplicationModal)
+        self.add_car_form.setWindowFlag(Qt.Window)
+        result = self.add_car_form.exec_()
+        if result == QDialog.Accepted:
+            self.load_data_to_table()
 
 # Dashboard'dan açarken:
 # self.car_list_form = CarListForm(self)

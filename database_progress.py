@@ -333,3 +333,20 @@ def update_servis_tutar(servis_id):
     conn.commit()
     conn.close()
 
+def load_servis_kayitlari_by_plaka(plaka):
+    """
+    Belirtilen plakaya ait TÜM servisleri döndürür: (servis_tarihi, servis_tutar, servis_durumu)
+    """
+    import sqlite3
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT servis_tarihi, servis_tutar, servis_durumu
+        FROM servisler
+        WHERE plaka = ?
+        ORDER BY servis_tarihi DESC
+    """, (plaka,))
+    result = cursor.fetchall()
+    conn.close()
+    return result
+

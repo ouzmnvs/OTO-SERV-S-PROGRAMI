@@ -9,10 +9,12 @@ import sys
 from cari_select_list import CariSelectListForm
 
 class AddCarForm(QDialog):
-    def __init__(self, cari_kodu=None, cari_unvani=None, parent=None, dashboard_ref=None, on_saved=None):
+    def __init__(self, cari_kodu=None, cari_unvani=None, parent=None, dashboard_ref=None, on_saved=None, edit_mode=False, car_data=None):
         super().__init__(parent)
         self.dashboard_ref = dashboard_ref
         self.on_saved = on_saved
+        self.edit_mode = edit_mode
+        self.car_data = car_data
         self.setWindowTitle("Araç Ekleme Formu")
         self.ruhsat_foto_path = ""
         self.cari_kodu_param = cari_kodu
@@ -23,6 +25,8 @@ class AddCarForm(QDialog):
         yukseklik = int(ekran.height() * 0.78)
         self.setFixedSize(genislik, yukseklik)
         self.init_ui()
+        if self.edit_mode and self.car_data:
+            self.fill_form_with_car_data()
 
     def init_ui(self):
         ana_layout = QVBoxLayout()
@@ -218,20 +222,38 @@ class AddCarForm(QDialog):
         try:
             conn = sqlite3.connect("oto_servis.db")
             cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM araclar WHERE plaka = ?", (plaka,))
+            if self.edit_mode and self.car_data:
+                eski_plaka = self.car_data.get("plaka", "")
+                cursor.execute("SELECT 1 FROM araclar WHERE plaka = ? AND plaka != ?", (plaka, eski_plaka))
+            else:
+                cursor.execute("SELECT 1 FROM araclar WHERE plaka = ?", (plaka,))
             if cursor.fetchone():
                 QMessageBox.warning(self, "Tekrarlı Kayıt", "Bu plakaya sahip bir araç zaten kayıtlı!")
                 return
 
-            cursor.execute("""
-                INSERT INTO araclar (
+            if self.edit_mode and self.car_data:
+                # GÜNCELLEME
+                cursor.execute("""
+                    UPDATE araclar SET
+                        cari_kodu=?, marka=?, model=?, model_yili=?, motor_no=?, sasi_no=?, arac_tipi=?,
+                        motor_hacmi=?, motor_gucu_kw=?, yakit_cinsi=?, getiren_kisi=?, son_bakim_tarihi=?, aciklama=?, ruhsat_foto=?
+                    WHERE plaka=?
+                """, (
+                    cari_kodu, marka, model, model_yili, motor_no, sasi_no, arac_tipi,
+                    motor_hacmi, motor_gucu, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto,
+                    eski_plaka
+                ))
+            else:
+                # EKLEME
+                cursor.execute("""
+                    INSERT INTO araclar (
+                        cari_kodu, plaka, marka, model, model_yili, motor_no, sasi_no, arac_tipi,
+                        motor_hacmi, motor_gucu_kw, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
                     cari_kodu, plaka, marka, model, model_yili, motor_no, sasi_no, arac_tipi,
-                    motor_hacmi, motor_gucu_kw, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                cari_kodu, plaka, marka, model, model_yili, motor_no, sasi_no, arac_tipi,
-                motor_hacmi, motor_gucu, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto
-            ))
+                    motor_hacmi, motor_gucu, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto
+                ))
             conn.commit()
             basarili_kayit = True
         except Exception as e:
@@ -260,6 +282,16 @@ class AddCarForm(QDialog):
     def set_cari_bilgileri(self, cari_kodu, cari_unvani, telefon=None, cari_tipi=None):
         self.cari_kodu.setText(cari_kodu)
         self.cari_unvani.setText(cari_unvani)
+
+    def fill_form_with_car_data(self):
+        # Form alanlarını car_data ile doldurun
+        self.plaka.setText(self.car_data.get("plaka", ""))
+        self.marka.setText(self.car_data.get("marka", ""))
+        self.model.setText(self.car_data.get("model", ""))
+        self.model_yili.setText(str(self.car_data.get("model_yili", "")))
+        self.arac_tipi.setCurrentText(self.car_data.get("arac_tipi", ""))
+        self.cari_kodu.setText(self.car_data.get("cari_kodu", ""))
+        # ... diğer alanlarınız varsa ekleyin ...
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
