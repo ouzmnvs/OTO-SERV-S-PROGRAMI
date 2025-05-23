@@ -10,22 +10,23 @@ import datetime
 import os
 import shutil
 import json
-from add_car import AddCarForm  # Satırın başına ekle
-from add_cari import AddCariForm  # <-- Bunu da ekle
-from car_list import CarListForm  # En üste ekle
-from cari_list import CariListForm  # En üste ekleyin
-from servis_form import ServisForm  # En üste ekleyin
-from open_service import OpenServiceForm  # OpenServiceForm sınıfını içe aktarın
-from close_service import CloseServiceForm  # CloseServiceForm sınıfını içe aktarın
-from payment_history import PaymentHistoryForm  # PaymentHistoryForm sınıfını içe aktarın
-from add_new_offer import AddNewOfferForm  # Yeni teklif formunu içe aktarın
-from add_offer import AddOfferForm  # Teklifler formunu içe aktarın
-from case import CaseTotalsForm  # CaseTotalsForm sınıfını içe aktarın
+from add_car import AddCarForm
+from add_cari import AddCariForm
+from car_list import CarListForm
+from cari_list import CariListForm
+from servis_form import ServisForm
+from open_service import OpenServiceForm
+from close_service import CloseServiceForm
+from payment_history import PaymentHistoryForm
+from add_new_offer import AddNewOfferForm
+from add_offer import AddOfferForm
+from case import CaseTotalsForm
+from create_database import create_database
 
 class Dashboard(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("İŞLEM SEÇİNİZ ...")
+        self.setWindowTitle("OTO SERVİS PROGRAMI")
         self.resize_or_center()
         self.load_backup_path()
         self.init_ui()
@@ -115,11 +116,9 @@ class Dashboard(QWidget):
                 border: 1px solid #bbb;
                 border-radius: 8px;
                 padding: 8px;
-                /* box-shadow: 2px 2px 8px rgba(0,0,0,0.12); */
             }
             QPushButton:hover {
                 background: #e0e0e0;
-                /* box-shadow: 4px 4px 16px rgba(0,0,0,0.18); */
             }
         """)
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -180,7 +179,7 @@ class Dashboard(QWidget):
 
         # Ödeme Geçmişi Butonu
         btn_odeme_gecmisi = self.renkli_buton("ÖDEME GEÇMİŞİ", 'fa5s.money-bill', 'teal')
-        btn_odeme_gecmisi.clicked.connect(self.open_payment_history_form)  # Butona işlev bağlayın
+        btn_odeme_gecmisi.clicked.connect(self.open_payment_history_form)
         tanimlamalar_layout.addWidget(btn_odeme_gecmisi)
 
         ana_layout.addWidget(self.bolum_kutusu(tanimlamalar_layout))
@@ -193,12 +192,12 @@ class Dashboard(QWidget):
         btn_servis_girisi.clicked.connect(self.servis_girisi_ekle_ac)
         is_tanim_layout.addWidget(btn_servis_girisi)
         btn_acik_servisler = self.renkli_buton("AÇIK SERVİSLER", 'fa5s.check', 'green')
-        btn_acik_servisler.clicked.connect(self.open_open_service_form)  # Butona işlev bağlayın
+        btn_acik_servisler.clicked.connect(self.open_open_service_form)
         is_tanim_layout.addWidget(btn_acik_servisler)
 
         # Kapalı Servisler Butonu
         btn_kapali_servisler = self.renkli_buton("KAPALI SERVİSLER", 'fa5s.clipboard-check', 'blue')
-        btn_kapali_servisler.clicked.connect(self.open_close_service_form)  # Butona işlev bağlayın
+        btn_kapali_servisler.clicked.connect(self.open_close_service_form)
         is_tanim_layout.addWidget(btn_kapali_servisler)
 
         # Teklif Ver butonunu ayrı tanımla ve sinyal bağla
@@ -230,7 +229,11 @@ class Dashboard(QWidget):
         btn_db_yol.clicked.connect(self.select_backup_location)
         finans_layout.addWidget(btn_db_yol)
         
-        finans_layout.addWidget(self.renkli_buton("SİSTEMİ KAPAT", 'fa5s.power-off', 'red'))
+        # Sistem Kapat butonunu ayrı tanımla ve sinyal bağla
+        btn_sistem_kapat = self.renkli_buton("SİSTEMİ KAPAT", 'fa5s.power-off', 'red')
+        btn_sistem_kapat.clicked.connect(self.close)
+        finans_layout.addWidget(btn_sistem_kapat)
+        
         ana_layout.addWidget(self.bolum_kutusu(finans_layout))
 
         # Alt bilgi
@@ -263,42 +266,48 @@ class Dashboard(QWidget):
 
     def servis_girisi_ekle_ac(self):
         self.servis_form = ServisForm(self)
-        self.servis_form.setModal(True)  # Modal olarak ayarla (ana pencereyi kilitler)
+        self.servis_form.setModal(True)
         self.servis_form.show()
 
     def open_open_service_form(self):
-        """Açık Servisler penceresini açar."""
         self.open_service_form = OpenServiceForm()
         self.open_service_form.show()
 
     def open_close_service_form(self):
-        """Kapalı Servisler penceresini açar."""
         self.close_service_form = CloseServiceForm()
         self.close_service_form.show()
 
     def open_payment_history_form(self):
-        """Ödeme Geçmişi penceresini açar."""
         self.payment_history_form = PaymentHistoryForm()
         self.payment_history_form.show()
 
     def open_add_new_offer_form(self):
-        """Yeni Teklif formunu modal olarak açar."""
         self.add_new_offer_form = AddNewOfferForm()
-        self.add_new_offer_form.setModal(True)  # Modal olarak ayarla
+        self.add_new_offer_form.setModal(True)
         self.add_new_offer_form.show()
 
     def open_add_offer_form(self):
-        """Teklifler formunu açar."""
         self.add_offer_form = AddOfferForm()
         self.add_offer_form.show()
 
     def open_case_form(self):
-        """Kasa formunu açar."""
         self.case_form = CaseTotalsForm()
         self.case_form.show()
 
+def check_database():
+    """Veritabanının varlığını kontrol eder ve gerekirse oluşturur"""
+    if not os.path.exists("oto_servis.db"):
+        create_database()
+        return True
+    return False
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    
+    # Veritabanı kontrolü
+    if check_database():
+        QMessageBox.information(None, "Bilgi", "Veritabanı başarıyla oluşturuldu!")
+    
     dashboard = Dashboard()
     dashboard.show()
     sys.exit(app.exec_())
