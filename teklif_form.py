@@ -9,6 +9,7 @@ from cari_select_list import CariSelectListForm
 from car_select_list import CarSelectListForm
 from database_progress import add_teklif_islem, delete_teklif_islem, update_teklif_tutar, get_teklif_details, delete_teklif
 from datetime import datetime
+import sqlite3
 
 class TeklifForm(QDialog):
     def __init__(self, dashboard_ref=None, teklif_id=None, teklif_no=None):
@@ -37,12 +38,12 @@ class TeklifForm(QDialog):
         ana_layout = QHBoxLayout()
         ana_layout.setSpacing(12)
 
-        # Sol Panel: Araç ve Cari Bilgileri
+        # Sol Panel: Araç, Cari ve Teklif Bilgileri
         sol_panel = QVBoxLayout()
         sol_panel.setSpacing(10)
 
         # Başlık
-        lbl_sol_baslik = QLabel("Araç - Cari Bilgileri")
+        lbl_sol_baslik = QLabel("Araç - Cari - Teklif Bilgileri")
         lbl_sol_baslik.setStyleSheet("""
             background-color: #333;
             color: white;
@@ -54,7 +55,7 @@ class TeklifForm(QDialog):
         sol_panel.addWidget(lbl_sol_baslik)
 
         # Bilgi Girişi
-        bilgi_group = QGroupBox("Cari ve Araç Bilgilerini Giriniz")
+        bilgi_group = QGroupBox("Cari, Araç ve Teklif Bilgilerini Giriniz")
         bilgi_group.setStyleSheet("""
             QGroupBox {
                 font-size: 16px;
@@ -90,65 +91,110 @@ class TeklifForm(QDialog):
             }
         """
 
+        # Teklif Bilgileri
+        bilgi_layout.addWidget(self._label("Teklif No", label_style), 0, 0)
+        self.teklif_no_input = QLineEdit()
+        self.teklif_no_input.setStyleSheet(input_style)
+        self.teklif_no_input.setReadOnly(True)
+        bilgi_layout.addWidget(self.teklif_no_input, 0, 1)
+
+        bilgi_layout.addWidget(self._label("Teklif Tarihi", label_style), 1, 0)
+        self.teklif_tarihi = QLineEdit()
+        self.teklif_tarihi.setStyleSheet(input_style)
+        self.teklif_tarihi.setReadOnly(True)
+        bilgi_layout.addWidget(self.teklif_tarihi, 1, 1)
+
+        bilgi_layout.addWidget(self._label("Geçerlilik Tarihi", label_style), 2, 0)
+        self.gecerlilik_tarihi = QLineEdit()
+        self.gecerlilik_tarihi.setStyleSheet(input_style)
+        self.gecerlilik_tarihi.setReadOnly(True)
+        bilgi_layout.addWidget(self.gecerlilik_tarihi, 2, 1)
+
+        bilgi_layout.addWidget(self._label("Ödeme Şekli", label_style), 3, 0)
+        self.odeme_sekli = QComboBox()
+        self.odeme_sekli.setStyleSheet(input_style)
+        self.odeme_sekli.addItems(["", "Nakit", "Kredi Kartı", "Havale/EFT", "Vadeli"])
+        bilgi_layout.addWidget(self.odeme_sekli, 3, 1)
+
+        bilgi_layout.addWidget(self._label("Vade Günü", label_style), 4, 0)
+        self.vade_gun = QLineEdit()
+        self.vade_gun.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.vade_gun, 4, 1)
+
+        bilgi_layout.addWidget(self._label("Teklif Veren", label_style), 5, 0)
+        self.teklif_veren = QLineEdit()
+        self.teklif_veren.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.teklif_veren, 5, 1)
+
+        bilgi_layout.addWidget(self._label("Teklif Alan", label_style), 6, 0)
+        self.teklif_alan = QLineEdit()
+        self.teklif_alan.setStyleSheet(input_style)
+        bilgi_layout.addWidget(self.teklif_alan, 6, 1)
+
         # Cari ve Araç Bilgileri
-        bilgi_layout.addWidget(self._label("Cari Kodu", label_style), 0, 0)
+        bilgi_layout.addWidget(self._label("Cari Kodu", label_style), 7, 0)
         self.cari_kodu = QLineEdit()
         self.cari_kodu.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.cari_kodu, 0, 1)
+        bilgi_layout.addWidget(self.cari_kodu, 7, 1)
 
-        bilgi_layout.addWidget(self._label("Cari Adı / Ünvanı", label_style), 1, 0)
+        bilgi_layout.addWidget(self._label("Cari Adı / Ünvanı", label_style), 8, 0)
         self.cari_unvan = QLineEdit()
         self.cari_unvan.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.cari_unvan, 1, 1)
+        bilgi_layout.addWidget(self.cari_unvan, 8, 1)
 
-        bilgi_layout.addWidget(self._label("Telefon", label_style), 2, 0)
+        bilgi_layout.addWidget(self._label("Telefon", label_style), 9, 0)
         self.telefon = QLineEdit()
         self.telefon.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.telefon, 2, 1)
+        bilgi_layout.addWidget(self.telefon, 9, 1)
 
-        bilgi_layout.addWidget(self._label("Cari Tipi *", label_style), 3, 0)
+        bilgi_layout.addWidget(self._label("Cari Tipi *", label_style), 10, 0)
         self.cari_tipi = QComboBox()
         self.cari_tipi.setStyleSheet(input_style)
         self.cari_tipi.addItems(["", "Bireysel","Kurumsal"])
-        bilgi_layout.addWidget(self.cari_tipi, 3, 1)
+        bilgi_layout.addWidget(self.cari_tipi, 10, 1)
 
         sec_btn = QPushButton(icon('fa5s.user-check', color='black'), "Seç")
         sec_btn.setMinimumHeight(36)
         sec_btn.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
         sec_btn.clicked.connect(self.open_cari_select_list)
-        bilgi_layout.addWidget(sec_btn, 3, 2)
+        bilgi_layout.addWidget(sec_btn, 10, 2)
 
-        bilgi_layout.addWidget(self._label("Plaka *", label_style), 4, 0)
+        bilgi_layout.addWidget(self._label("Plaka *", label_style), 11, 0)
         self.plaka = QLineEdit()
         self.plaka.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.plaka, 4, 1)
+        self.plaka.setReadOnly(True)
+        bilgi_layout.addWidget(self.plaka, 11, 1)
 
-        bilgi_layout.addWidget(self._label("Araç Tipi *", label_style), 5, 0)
+        bilgi_layout.addWidget(self._label("Araç Tipi *", label_style), 12, 0)
         self.arac_tipi = QComboBox()
         self.arac_tipi.setStyleSheet(input_style)
         self.arac_tipi.addItems(["", "Otomobil", "Kamyonet", "Minibüs", "Diğer"])
-        bilgi_layout.addWidget(self.arac_tipi, 5, 1)
+        self.arac_tipi.setEnabled(False)
+        bilgi_layout.addWidget(self.arac_tipi, 12, 1)
 
-        bilgi_layout.addWidget(self._label("Model Yılı", label_style), 6, 0)
+        bilgi_layout.addWidget(self._label("Model Yılı", label_style), 13, 0)
         self.model_yili = QLineEdit()
         self.model_yili.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.model_yili, 6, 1)
+        self.model_yili.setReadOnly(True)
+        bilgi_layout.addWidget(self.model_yili, 13, 1)
 
-        bilgi_layout.addWidget(self._label("Marka", label_style), 7, 0)
+        bilgi_layout.addWidget(self._label("Marka", label_style), 14, 0)
         self.marka = QLineEdit()
         self.marka.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.marka, 7, 1)
+        self.marka.setReadOnly(True)
+        bilgi_layout.addWidget(self.marka, 14, 1)
 
-        bilgi_layout.addWidget(self._label("Model", label_style), 8, 0)
+        bilgi_layout.addWidget(self._label("Model", label_style), 15, 0)
         self.model = QLineEdit()
         self.model.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.model, 8, 1)
+        self.model.setReadOnly(True)
+        bilgi_layout.addWidget(self.model, 15, 1)
 
         arac_sec_btn = QPushButton(icon('fa5s.car', color='blue'), "Seç")
         arac_sec_btn.setMinimumHeight(36)
         arac_sec_btn.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
         arac_sec_btn.clicked.connect(self.open_car_select_list)
-        bilgi_layout.addWidget(arac_sec_btn, 8, 2)
+        bilgi_layout.addWidget(arac_sec_btn, 15, 2)
 
         bilgi_group.setLayout(bilgi_layout)
         sol_panel.addWidget(bilgi_group)
@@ -443,6 +489,47 @@ class TeklifForm(QDialog):
             return
 
         try:
+            # Veritabanı bağlantısı
+            conn = sqlite3.connect("oto_servis.db")
+            cursor = conn.cursor()
+            
+            # Cari kontrolü
+            cursor.execute("SELECT COUNT(*) FROM cariler WHERE cari_kodu = ?", (self.cari_kodu.text(),))
+            if cursor.fetchone()[0] == 0:
+                QMessageBox.warning(self, "Uyarı", "Seçilen cari veritabanında bulunamadı cari kodunu ve diğer alanları kontrol ediniz!")
+                conn.close()
+                return
+
+            # Araç kontrolü
+            cursor.execute("SELECT COUNT(*) FROM araclar WHERE plaka = ?", (self.plaka.text(),))
+            if cursor.fetchone()[0] == 0:
+                QMessageBox.warning(self, "Uyarı", "Seçilen araç veritabanında bulunamadı!")
+                conn.close()
+                return
+            
+            # Teklif tablosunu güncelle
+            cursor.execute("""
+                UPDATE teklifler 
+                SET cari_kodu = ?,
+                    plaka = ?,
+                    odeme_sekli = ?,
+                    odeme_vade_gun = ?,
+                    teklif_alan = ?,
+                    teklif_veren_personel = ?
+                WHERE id = ?
+            """, (
+                self.cari_kodu.text(),
+                self.plaka.text(),
+                self.odeme_sekli.currentText(),
+                int(self.vade_gun.text()) if self.vade_gun.text() else 0,
+                self.teklif_alan.text(),
+                self.teklif_veren.text(),
+                self.teklif_id
+            ))
+            
+            conn.commit()
+            conn.close()
+
             # Teklif tutarını güncelle
             update_teklif_tutar(self.teklif_id)
             QMessageBox.information(self, "Başarılı", "Teklif başarıyla kaydedildi.")
@@ -454,12 +541,39 @@ class TeklifForm(QDialog):
         """Seçili işlemi tablodan siler."""
         selected = self.islem_table.currentRow()
         if selected >= 0:
-            if self.teklif_id:
-                delete_teklif_islem(self.teklif_id, selected)
-                update_teklif_tutar(self.teklif_id)
+            # İşlem detaylarını al
+            islem_aciklama = self.islem_table.item(selected, 0).text()
+            islem_tutar = self.islem_table.item(selected, 1).text()
+            kdv_orani = self.islem_table.item(selected, 2).text()
+            kdv_tutari = self.islem_table.item(selected, 3).text()
+            aciklama = self.islem_table.item(selected, 4).text()
 
-            self.islem_table.removeRow(selected)
-            self.guncelle_islem_ozeti()
+            # Silme onayı için mesaj oluştur
+            mesaj = (
+                f"İşlem Açıklaması: {islem_aciklama}\n"
+                f"Tutar: {islem_tutar}\n"
+                f"KDV Oranı: {kdv_orani}\n"
+                f"KDV Tutarı: {kdv_tutari}\n"
+                f"Açıklama: {aciklama}\n\n"
+                "Bu işlemi silmek istediğinize emin misiniz?"
+            )
+
+            # Kullanıcıdan onay al
+            reply = QMessageBox.question(
+                self,
+                "İşlem Silme Onayı",
+                mesaj,
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply == QMessageBox.Yes:
+                if self.teklif_id:
+                    delete_teklif_islem(self.teklif_id, selected)
+                    update_teklif_tutar(self.teklif_id)
+
+                self.islem_table.removeRow(selected)
+                self.guncelle_islem_ozeti()
         else:
             QMessageBox.warning(self, "Uyarı", "Lütfen silmek için bir işlem seçin!")
 
@@ -497,10 +611,19 @@ class TeklifForm(QDialog):
             if not teklif_details:
                 raise Exception("Teklif detayları bulunamadı!")
 
+            # Teklif bilgilerini doldur
+            self.teklif_no_input.setText(teklif_details['teklif']['teklif_no'])
+            self.teklif_tarihi.setText(teklif_details['teklif']['teklif_tarihi'])
+            self.gecerlilik_tarihi.setText(teklif_details['teklif']['gecerlilik_tarihi'])
+            self.odeme_sekli.setCurrentText(teklif_details['teklif']['odeme_sekli'])
+            self.vade_gun.setText(str(teklif_details['teklif']['odeme_vade_gun']))
+            self.teklif_veren.setText(teklif_details['teklif']['teklif_veren_personel'])
+            self.teklif_alan.setText(teklif_details['teklif']['teklif_alan'])
+
             # Cari bilgilerini doldur
             self.set_cari_bilgileri(
                 cari_kodu=teklif_details['teklif']['cari_kodu'],
-                cari_unvani=teklif_details['teklif']['cari_kodu'],  # Cari ünvanı için ayrı bir alan yok
+                cari_unvani=teklif_details['cari']['cari_ad_unvan'],
                 telefon=teklif_details['cari']['cep_telefonu'] or "",
                 cari_tipi=teklif_details['cari']['cari_tipi'] or ""
             )

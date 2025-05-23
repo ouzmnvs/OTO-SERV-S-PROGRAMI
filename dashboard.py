@@ -16,6 +16,7 @@ from close_service import CloseServiceForm  # CloseServiceForm sınıfını içe
 from payment_history import PaymentHistoryForm  # PaymentHistoryForm sınıfını içe aktarın
 from add_new_offer import AddNewOfferForm  # Yeni teklif formunu içe aktarın
 from add_offer import AddOfferForm  # Teklifler formunu içe aktarın
+from case import CaseTotalsForm  # CaseTotalsForm sınıfını içe aktarın
 
 class Dashboard(QWidget):
     def __init__(self):
@@ -148,7 +149,12 @@ class Dashboard(QWidget):
         ana_layout.addWidget(self.bolum_baslik("FİNANS - DİĞER"))
         finans_layout = QHBoxLayout()
         finans_layout.setSpacing(15)
-        finans_layout.addWidget(self.renkli_buton("KASA", 'mdi.cash-multiple', 'darkgreen'))  # <-- Güncellendi
+        
+        # KASA butonunu ayrı tanımla ve sinyal bağla
+        btn_kasa = self.renkli_buton("KASA", 'mdi.cash-multiple', 'darkgreen')
+        btn_kasa.clicked.connect(self.open_case_form)
+        finans_layout.addWidget(btn_kasa)
+        
         finans_layout.addWidget(self.renkli_buton("EXCEL'İ GÖSTER", 'fa5s.file-excel', 'green'))
         finans_layout.addWidget(self.renkli_buton("VERİTABANI YOLU DEĞİŞTİR", 'fa5s.database', 'navy'))
         finans_layout.addWidget(self.renkli_buton("SİSTEMİ KAPAT", 'fa5s.power-off', 'red'))
@@ -212,6 +218,11 @@ class Dashboard(QWidget):
         """Teklifler formunu açar."""
         self.add_offer_form = AddOfferForm()
         self.add_offer_form.show()
+
+    def open_case_form(self):
+        """Kasa formunu açar."""
+        self.case_form = CaseTotalsForm()
+        self.case_form.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

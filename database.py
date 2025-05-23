@@ -67,8 +67,8 @@ CREATE TABLE IF NOT EXISTS servisler (
     servis_durumu TEXT DEFAULT 'Açık',
     servis_tarihi TEXT NOT NULL,
     arac_getiren_kisi TEXT,
-    FOREIGN KEY (cari_kodu) REFERENCES cariler (cari_kodu) ON DELETE CASCADE,
-    FOREIGN KEY (plaka) REFERENCES araclar (plaka) ON DELETE CASCADE
+    FOREIGN KEY (cari_kodu) REFERENCES cariler (cari_kodu) ON DELETE NO ACTION,
+    FOREIGN KEY (plaka) REFERENCES araclar (plaka) ON DELETE NO ACTION
 )
 """)
 
@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS kasa (
     odeme_tipi TEXT NOT NULL,
     odeme_kaynagi TEXT,  -- 'TEKLIF' veya 'SERVIS'
     kaynak_id INTEGER,   -- Teklif veya servis ID'si
-    aciklama TEXT
+    aciklama TEXT,
+    FOREIGN KEY (cari_kodu) REFERENCES cariler (cari_kodu) ON DELETE NO ACTION
 )
 """)
 
@@ -105,8 +106,8 @@ CREATE TABLE IF NOT EXISTS teklifler (
     aciklama TEXT,
     toplam_tutar REAL DEFAULT 0,
     teklif_durumu TEXT DEFAULT 'Açık',
-    FOREIGN KEY (cari_kodu) REFERENCES cariler (cari_kodu) ON DELETE CASCADE,
-    FOREIGN KEY (plaka) REFERENCES araclar (plaka) ON DELETE CASCADE
+    FOREIGN KEY (cari_kodu) REFERENCES cariler (cari_kodu) ON DELETE NO ACTION,
+    FOREIGN KEY (plaka) REFERENCES araclar (plaka) ON DELETE NO ACTION
 )
 """)
 

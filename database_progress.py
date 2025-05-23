@@ -445,7 +445,7 @@ def get_teklif_details(teklif_no):
         SELECT t.id, t.teklif_no, t.cari_kodu, t.plaka, t.teklif_tarihi, t.gecerlilik_tarihi,
                t.odeme_sekli, t.odeme_vade_gun, t.teklif_veren_personel, t.teklif_alan,
                t.aciklama, t.toplam_tutar,
-               c.cep_telefonu, c.cari_tipi,
+               c.cari_ad_unvan, c.cep_telefonu, c.cari_tipi,
                a.arac_tipi, a.model_yili, a.marka, a.model
         FROM teklifler t
         LEFT JOIN cariler c ON t.cari_kodu = c.cari_kodu
@@ -474,16 +474,17 @@ def get_teklif_details(teklif_no):
 
     # Cari bilgileri
     cari_dict = {
-        "cep_telefonu": teklif[12],
-        "cari_tipi": teklif[13]
+        "cari_ad_unvan": teklif[12],
+        "cep_telefonu": teklif[13],
+        "cari_tipi": teklif[14]
     }
 
     # Araç bilgileri
     arac_dict = {
-        "arac_tipi": teklif[14],
-        "model_yili": teklif[15],
-        "marka": teklif[16],
-        "model": teklif[17]
+        "arac_tipi": teklif[15],
+        "model_yili": teklif[16],
+        "marka": teklif[17],
+        "model": teklif[18]
     }
 
     # Teklif işlemleri
@@ -587,4 +588,57 @@ def delete_teklif(teklif_id):
     cursor.execute("DELETE FROM teklifler WHERE id = ?", (teklif_id,))
     conn.commit()
     conn.close()
+
+def get_kasa_transactions(start_date=None, end_date=None, odeme_tipi=None, islem_tipi=None):
+    """
+    Kasa işlemlerini getirir.
+    Parametreler:
+    - start_date: Başlangıç tarihi (YYYY-MM-DD formatında)
+    - end_date: Bitiş tarihi (YYYY-MM-DD formatında)
+    - odeme_tipi: Ödeme tipi (Nakit, Kredi Kartı, Havale/EFT, Vadeli)
+    - islem_tipi: İşlem tipi (TEKLIF veya SERVIS)
+    
+    Dönüş: [(tarih, odeme_tipi, aciklama, tutar, odeme_kaynagi), ...]
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    
+    # Temel sorgu
+    query = """
+        SELECT 
+            k.tarih,
+            k.odeme_tipi,
+            k.aciklama,
+            k.tutar,
+            k.odeme_kaynagi
+        FROM kasa k
+        WHERE 1=1
+    """
+    params = []
+    
+    # Tarih filtresi
+    if start_date:
+        query += " AND k.tarih >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND k.tarih <= ?"
+        params.append(end_date)
+    
+    # Ödeme tipi filtresi
+    if odeme_tipi:
+        query += " AND k.odeme_tipi = ?"
+        params.append(odeme_tipi)
+    
+    # İşlem tipi filtresi
+    if islem_tipi:
+        query += " AND k.odeme_kaynagi = ?"
+        params.append(islem_tipi)
+    
+    # Sıralama
+    query += " ORDER BY k.tarih DESC"
+    
+    cursor.execute(query, params)
+    result = cursor.fetchall()
+    conn.close()
+    return result
 
