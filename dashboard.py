@@ -1,11 +1,15 @@
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QGroupBox, QSizePolicy, QFrame, QDesktopWidget
+    QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QGroupBox, QSizePolicy, QFrame, QDesktopWidget,
+    QFileDialog, QMessageBox
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QSize
 from qtawesome import icon
 import sys
 import datetime
+import os
+import shutil
+import json
 from add_car import AddCarForm  # Satırın başına ekle
 from add_cari import AddCariForm  # <-- Bunu da ekle
 from car_list import CarListForm  # En üste ekle
@@ -23,7 +27,71 @@ class Dashboard(QWidget):
         super().__init__()
         self.setWindowTitle("İŞLEM SEÇİNİZ ...")
         self.resize_or_center()
+        self.load_backup_path()
         self.init_ui()
+
+    def load_backup_path(self):
+        """Yedekleme yolunu yapılandırma dosyasından yükler"""
+        self.config_file = "db_config.json"
+        self.default_backup_path = os.path.join(os.path.expanduser("~"), "Desktop", "OTO-SERVIS-DB")
+        
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    self.backup_path = config.get('backup_path', self.default_backup_path)
+            else:
+                self.backup_path = self.default_backup_path
+        except Exception:
+            self.backup_path = self.default_backup_path
+
+    def save_backup_path(self):
+        """Yedekleme yolunu yapılandırma dosyasına kaydeder"""
+        try:
+            config = {'backup_path': self.backup_path}
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f)
+        except Exception as e:
+            print(f"Yapılandırma kaydetme hatası: {str(e)}")
+
+    def select_backup_location(self):
+        """Yedekleme konumunu seçmek için dosya diyaloğu açar"""
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Veritabanı Yedekleme Konumunu Seçin",
+            self.backup_path,
+            QFileDialog.ShowDirsOnly
+        )
+        
+        if folder:
+            self.backup_path = folder
+            self.save_backup_path()
+            QMessageBox.information(
+                self,
+                "Bilgi",
+                f"Yedekleme konumu güncellendi:\n{self.backup_path}"
+            )
+
+    def closeEvent(self, event):
+        """Dashboard kapatıldığında çalışacak fonksiyon"""
+        try:
+            # Klasör yoksa oluştur
+            if not os.path.exists(self.backup_path):
+                os.makedirs(self.backup_path)
+            
+            # Veritabanı dosyasının kaynak ve hedef yolları
+            source_db = "oto_servis.db"
+            target_db = os.path.join(self.backup_path, "oto_servis.db")
+            
+            # Veritabanı dosyasını kopyala
+            if os.path.exists(source_db):
+                shutil.copy2(source_db, target_db)
+                print(f"Veritabanı başarıyla yedeklendi: {target_db}")
+            
+            event.accept()
+        except Exception as e:
+            print(f"Veritabanı yedekleme hatası: {str(e)}")
+            event.accept()
 
     def resize_or_center(self):
         ekran = QDesktopWidget().screenGeometry()
@@ -156,7 +224,12 @@ class Dashboard(QWidget):
         finans_layout.addWidget(btn_kasa)
         
         finans_layout.addWidget(self.renkli_buton("EXCEL'İ GÖSTER", 'fa5s.file-excel', 'green'))
-        finans_layout.addWidget(self.renkli_buton("VERİTABANI YOLU DEĞİŞTİR", 'fa5s.database', 'navy'))
+        
+        # Veritabanı Yolu Değiştir butonunu ayrı tanımla ve sinyal bağla
+        btn_db_yol = self.renkli_buton("VERİTABANI YOLU DEĞİŞTİR", 'fa5s.database', 'navy')
+        btn_db_yol.clicked.connect(self.select_backup_location)
+        finans_layout.addWidget(btn_db_yol)
+        
         finans_layout.addWidget(self.renkli_buton("SİSTEMİ KAPAT", 'fa5s.power-off', 'red'))
         ana_layout.addWidget(self.bolum_kutusu(finans_layout))
 

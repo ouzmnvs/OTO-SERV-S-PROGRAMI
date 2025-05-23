@@ -1,7 +1,11 @@
 import sqlite3
+import os
+
+# Veritabanı yolu
+DB_PATH = os.path.join(os.path.expanduser("~"), "Desktop", "OTO-SERVIS-DB", "oto_servis.db")
 
 # Veritabanı bağlantısı oluştur
-conn = sqlite3.connect("oto_servis.db")
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
 # CARİ tablosunu oluştur
