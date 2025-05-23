@@ -14,6 +14,8 @@ from servis_form import ServisForm  # En üste ekleyin
 from open_service import OpenServiceForm  # OpenServiceForm sınıfını içe aktarın
 from close_service import CloseServiceForm  # CloseServiceForm sınıfını içe aktarın
 from payment_history import PaymentHistoryForm  # PaymentHistoryForm sınıfını içe aktarın
+from add_new_offer import AddNewOfferForm  # Yeni teklif formunu içe aktarın
+from add_offer import AddOfferForm  # Teklifler formunu içe aktarın
 
 class Dashboard(QWidget):
     def __init__(self):
@@ -130,8 +132,16 @@ class Dashboard(QWidget):
         btn_kapali_servisler.clicked.connect(self.open_close_service_form)  # Butona işlev bağlayın
         is_tanim_layout.addWidget(btn_kapali_servisler)
 
-        is_tanim_layout.addWidget(self.renkli_buton("RANDEVU", 'fa5s.calendar', 'red'))
-        is_tanim_layout.addWidget(self.renkli_buton("ARAÇ GEÇMİŞİ", 'fa5s.history', 'gray'))
+        # Teklif Ver butonunu ayrı tanımla ve sinyal bağla
+        btn_teklif_ver = self.renkli_buton("TEKLİF VER", 'fa5s.file-invoice-dollar', 'red')
+        btn_teklif_ver.clicked.connect(self.open_add_new_offer_form)
+        is_tanim_layout.addWidget(btn_teklif_ver)
+        
+        # Teklifler butonunu ayrı tanımla ve sinyal bağla
+        btn_teklifler = self.renkli_buton("TEKLİFLER", 'fa5s.file-invoice', 'gray')
+        btn_teklifler.clicked.connect(self.open_add_offer_form)
+        is_tanim_layout.addWidget(btn_teklifler)
+        
         ana_layout.addWidget(self.bolum_kutusu(is_tanim_layout))
 
         # FİNANS - DİĞER
@@ -191,6 +201,17 @@ class Dashboard(QWidget):
         """Ödeme Geçmişi penceresini açar."""
         self.payment_history_form = PaymentHistoryForm()
         self.payment_history_form.show()
+
+    def open_add_new_offer_form(self):
+        """Yeni Teklif formunu modal olarak açar."""
+        self.add_new_offer_form = AddNewOfferForm()
+        self.add_new_offer_form.setModal(True)  # Modal olarak ayarla
+        self.add_new_offer_form.show()
+
+    def open_add_offer_form(self):
+        """Teklifler formunu açar."""
+        self.add_offer_form = AddOfferForm()
+        self.add_offer_form.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

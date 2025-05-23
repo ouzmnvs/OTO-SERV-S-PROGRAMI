@@ -5,15 +5,18 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
-from cari_select_list import CariSelectListForm  # CariSelectListForm'u içe aktarın
-from car_select_list import CarSelectListForm  # CarSelectListForm'u içe aktarın
-from database_progress import add_servis, add_islem, add_teklif_islem, delete_teklif_islem, update_teklif_tutar  # Servis ekleme fonksiyonunu içe aktarın
+from cari_select_list import CariSelectListForm
+from car_select_list import CarSelectListForm
+from database_progress import add_teklif_islem, delete_teklif_islem, update_teklif_tutar, get_teklif_details, delete_teklif
 from datetime import datetime
-class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
-    def __init__(self, dashboard_ref=None):
+
+class TeklifForm(QDialog):
+    def __init__(self, dashboard_ref=None, teklif_id=None, teklif_no=None):
         super().__init__()
         self.dashboard_ref = dashboard_ref
-        self.setWindowTitle("İş Emri Formu")
+        self.teklif_id = teklif_id
+        self.teklif_no = teklif_no
+        self.setWindowTitle("Teklif Formu")
         from PyQt5.QtWidgets import QDesktopWidget
         ekran = QDesktopWidget().screenGeometry()
         genislik = int(ekran.width() * 0.82)
@@ -25,6 +28,10 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             y = 0
         self.move(x, y)
         self.init_ui()
+        
+        # Teklif detaylarını yükle
+        if teklif_no:
+            self.load_teklif_details()
 
     def init_ui(self):
         ana_layout = QHBoxLayout()
@@ -83,7 +90,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             }
         """
 
-        # Cari ve Araç Bilgilerini Giriniz (Sadece cari ile ilgili kısım güncellendi)
+        # Cari ve Araç Bilgileri
         bilgi_layout.addWidget(self._label("Cari Kodu", label_style), 0, 0)
         self.cari_kodu = QLineEdit()
         self.cari_kodu.setStyleSheet(input_style)
@@ -108,7 +115,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         sec_btn = QPushButton(icon('fa5s.user-check', color='black'), "Seç")
         sec_btn.setMinimumHeight(36)
         sec_btn.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
-        sec_btn.clicked.connect(self.open_cari_select_list)  # "Seç" butonuna metodu bağlayın
+        sec_btn.clicked.connect(self.open_cari_select_list)
         bilgi_layout.addWidget(sec_btn, 3, 2)
 
         bilgi_layout.addWidget(self._label("Plaka *", label_style), 4, 0)
@@ -137,55 +144,14 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.model.setStyleSheet(input_style)
         bilgi_layout.addWidget(self.model, 8, 1)
 
-        bilgi_layout.addWidget(self._label("Aracı Getiren Kişi", label_style), 9, 0)
-        self.arac_getiren_kisi = QLineEdit()
-        self.arac_getiren_kisi.setStyleSheet(input_style)
-        bilgi_layout.addWidget(self.arac_getiren_kisi, 9, 1, 1, 2)
-
         arac_sec_btn = QPushButton(icon('fa5s.car', color='blue'), "Seç")
         arac_sec_btn.setMinimumHeight(36)
         arac_sec_btn.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
-        arac_sec_btn.clicked.connect(self.open_car_select_list)  # "Seç" butonuna metodu bağlayın
+        arac_sec_btn.clicked.connect(self.open_car_select_list)
         bilgi_layout.addWidget(arac_sec_btn, 8, 2)
 
         bilgi_group.setLayout(bilgi_layout)
         sol_panel.addWidget(bilgi_group)
-
-        # Geçmiş Servis Kayıtları
-        gecmis_group = QGroupBox("Geçmiş Servis Kayıtları")
-        gecmis_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 15px;
-                font-weight: bold;
-                color: #333;
-                border: 1.5px solid #bbb;
-                border-radius: 8px;
-                margin-top: 10px;
-            }
-        """)
-        gecmis_layout = QVBoxLayout()
-        self.gecmis_table = QTableWidget(0, 3)
-        self.gecmis_table.setHorizontalHeaderLabels(["Tarih", "Tutar", "Durum"])
-        self.gecmis_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.gecmis_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.gecmis_table.setAlternatingRowColors(True)
-        self.gecmis_table.setStyleSheet("""
-            QTableWidget {
-                font-size: 14px;
-                alternate-background-color: #f5f5f5;
-                background: #fff;
-            }
-            QHeaderView::section {
-                background: #ececec;
-                font-weight: bold;
-                font-size: 14px;
-                border: 1px solid #bbb;
-                padding: 6px;
-            }
-        """)
-        gecmis_layout.addWidget(self.gecmis_table)
-        gecmis_group.setLayout(gecmis_layout)
-        sol_panel.addWidget(gecmis_group)
 
         ana_layout.addLayout(sol_panel, 2)
 
@@ -239,20 +205,20 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         islem_layout.addWidget(self._label("KDV Oranı (%)", label_style), 0, 6)
         self.kdv_orani = QLineEdit()
         self.kdv_orani.setStyleSheet(input_style)
-        self.kdv_orani.setPlaceholderText("20")  # Varsayılan KDV oranı
+        self.kdv_orani.setPlaceholderText("20")
         islem_layout.addWidget(self.kdv_orani, 0, 7)
 
         btn_islem_ekle = QPushButton(icon('fa5s.plus-circle', color='green'), "Ekle")
         btn_islem_ekle.setMinimumHeight(36)
         btn_islem_ekle.setStyleSheet("font-size:16px; font-weight:700; padding:6px 18px;")
-        btn_islem_ekle.clicked.connect(self.islem_ekle)  # İşlem ekleme işlevini bağlayın
-        islem_layout.addWidget(btn_islem_ekle, 0, 8)  # "Ekle" butonunu en sağa taşı
+        btn_islem_ekle.clicked.connect(self.islem_ekle)
+        islem_layout.addWidget(btn_islem_ekle, 0, 8)
 
         islem_group.setLayout(islem_layout)
         sag_panel.addWidget(islem_group)
 
         # İşlem Listesi Tablosu
-        self.islem_table = QTableWidget(0, 5)  # Sütun sayısını 5'e çıkarıyoruz
+        self.islem_table = QTableWidget(0, 5)
         self.islem_table.setHorizontalHeaderLabels([
             "İşlem Açıklaması", "Tutar", "KDV (%)", "KDV Tutarı", "Açıklama"
         ])
@@ -305,15 +271,18 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         alt_layout.addWidget(ozet_group, 1)
 
         # Alt Butonlar
-        btn_emri_olustur = self._buton("İŞ EMRİ OLUŞTUR", 'fa5s.save', 'deepskyblue')
-        btn_emri_olustur.clicked.connect(self.emri_olustur)
+        btn_kaydet = self._buton("KAYDET", 'fa5s.save', 'deepskyblue')
+        btn_kaydet.clicked.connect(self.teklifi_kaydet)
         btn_islemleri_temizle = self._buton("İŞLEMİ SİL", 'fa5s.sync', '#fbc02d')
         btn_islemleri_temizle.clicked.connect(self.islem_sil)
+        btn_teklif_sil = self._buton("TEKLİFİ SİL", 'fa5s.trash', '#b71c1c')
+        btn_teklif_sil.clicked.connect(self.teklifi_sil)
         btn_pdf_aktar = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
         btn_sayfa_kapat = self._buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
         btn_sayfa_kapat.clicked.connect(self.sayfayi_kapat)
-        alt_layout.addWidget(btn_emri_olustur, 2)
+        alt_layout.addWidget(btn_kaydet, 2)
         alt_layout.addWidget(btn_islemleri_temizle, 2)
+        alt_layout.addWidget(btn_teklif_sil, 2)
         alt_layout.addWidget(btn_pdf_aktar, 2)
         alt_layout.addWidget(btn_sayfa_kapat, 2)
 
@@ -356,7 +325,6 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.model_yili.setText(model_yili)
         self.marka.setText(marka)
         self.model.setText(model)
-        self.arac_getiren_kisi.clear()  # Aracı getiren kişi alanını temizle
 
     def _label(self, text, style):
         lbl = QLabel(text)
@@ -382,11 +350,12 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         """)
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         return btn
+
     def sayfayi_kapat(self):
-        """Servis formunu kapatır ve dashboard ekranına geri döner."""
-        self.close()  # QDialog'da close() kullanılır
+        """Teklif formunu kapatır ve dashboard ekranına geri döner."""
+        self.close()
         if self.dashboard_ref:
-            self.dashboard_ref.show()  # Dashboard ekranını tekrar göster
+            self.dashboard_ref.show()
 
     def islem_ekle(self):
         """İşlem bilgilerini tabloya ekler."""
@@ -401,7 +370,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         # Formdaki bilgileri al
         islem_aciklama = self.islem_aciklama.text().strip()
         islem_tutari = self.islem_tutar.text().strip()
-        kdv_orani = self.kdv_orani.text().strip() or "20"  # Varsayılan KDV oranı
+        kdv_orani = self.kdv_orani.text().strip() or "20"
         aciklama = self.islem_ek_aciklama.text().strip()
 
         # Gerekli alanların doldurulup doldurulmadığını kontrol et
@@ -424,6 +393,17 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             self.islem_table.setItem(row_count, 3, QTableWidgetItem(f"{kdv_tutari:.2f}"))
             self.islem_table.setItem(row_count, 4, QTableWidgetItem(aciklama))
 
+            # İşlemi teklife ekle
+            if self.teklif_id:
+                add_teklif_islem(
+                    teklif_id=self.teklif_id,
+                    islem_aciklama=islem_aciklama,
+                    islem_tutari=islem_tutari_float,
+                    kdv_orani=kdv_orani,
+                    kdv_tutari=kdv_tutari,
+                    aciklama=aciklama
+                )
+
             # İşlem özetini güncelle
             self.guncelle_islem_ozeti()
 
@@ -433,13 +413,13 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             self.kdv_orani.clear()
             self.islem_ek_aciklama.clear()
 
-            print("İşlem başarıyla eklendi")
         except ValueError:
             QMessageBox.warning(self, "Hata", "KDV Oranı ve Tutar geçerli bir sayı olmalıdır!")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
     def guncelle_islem_ozeti(self):
+        """İşlem özetini günceller."""
         toplam_tutar = 0
         toplam_kdv = 0
         toplam_islem = self.islem_table.rowCount()
@@ -454,121 +434,104 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
         self.lbl_islem_sayisi.setText(f"Toplam İşlem Sayısı\n{toplam_islem}")
         self.lbl_islem_tutar.setText(f"Toplam İşlem Tutarı\n{toplam_tutar:.2f}")
-        # Toplam KDV tutarını da göster
-        if hasattr(self, "lbl_kdv_tutar"):
-            self.lbl_kdv_tutar.setText(f"Toplam KDV Tutarı\n{toplam_kdv:.2f}")
-        else:
-            self.lbl_kdv_tutar = QLabel(f"Toplam KDV Tutarı\n{toplam_kdv:.2f}")
-            self.lbl_kdv_tutar.setStyleSheet("font-size: 15px; background: #ffe0b2; padding: 6px;")
-            # Özet grubuna ekleyin
-            self.layout().itemAt(1).itemAt(0).widget().layout().addWidget(self.lbl_kdv_tutar)
+        self.lbl_kdv_tutar.setText(f"Toplam KDV Tutarı\n{toplam_kdv:.2f}")
 
-    def emri_olustur(self):
-        """Cari ve araç bilgileriyle servis oluşturur ve işlemleri bu servise bağlar."""
-        cari_kodu = self.cari_kodu.text().strip()
-        plaka = self.plaka.text().strip()
-        servis_tarihi = datetime.now().strftime("%Y-%m-%d")  # Standart tarih formatı
-        aciklama = "Servis oluşturuldu."  # Servis açıklaması
-        arac_getiren_kisi = self.arac_getiren_kisi.text().strip()  # Aracı getiren kişi bilgisini al
-
-        # Gerekli alanların doldurulup doldurulmadığını kontrol et
-        if not cari_kodu or not plaka:
-            uyari = UyariPenceresi("Lütfen cari kodu ve plaka bilgilerini doldurun!", self)
-            uyari.exec_()
+    def teklifi_kaydet(self):
+        """Teklif işlemlerini kaydeder."""
+        if not self.teklif_id:
+            QMessageBox.warning(self, "Uyarı", "Teklif ID bulunamadı!")
             return
 
-        # İşlem tablosunun boş olup olmadığını kontrol et
-        toplam_islem = self.islem_table.rowCount()
-        if toplam_islem == 0:
-            uyari = UyariPenceresi("Lütfen en az bir işlem ekleyin!", self)
-            uyari.exec_()
-            return
-
-        # Servis ve işlemleri kaydet
-        servis_id = add_servis(cari_kodu, plaka, servis_tarihi, aciklama, arac_getiren_kisi)  # arac_getiren_kisi parametresini ekle
-        for row in range(toplam_islem):
-            islem_aciklama = self.islem_table.item(row, 0).text()
-            # KDV tutarını hesaplayıp add_islem'e gönderin
-            islem_tutari = float(self.islem_table.item(row, 1).text())
-            kdv_orani = float(self.islem_table.item(row, 2).text())
-            kdv_tutari = float(self.islem_table.item(row, 3).text())
-            islem_aciklama_ek = self.islem_table.item(row, 4).text()
-            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, islem_aciklama_ek)
-
-        # Formu temizle
-        self.islem_table.setRowCount(0)
-        self.guncelle_islem_ozeti()
-        self.cari_kodu.clear()
-        self.plaka.clear()
-        self.cari_unvan.clear()
-        self.telefon.clear()
-        self.cari_tipi.setCurrentIndex(0)
-        self.arac_tipi.setCurrentIndex(0)
-        self.model_yili.clear()
-        self.marka.clear()
-        self.model.clear()
-
-        # Bilgilendirme penceresini göster
-        bilgi = BilgilendirmePenceresi(self)
-        bilgi.exec_()
-
-        QMessageBox.information(self, "Başarılı", "Servis başarıyla oluşturuldu.")
-        self.accept()  # Formu başarılı şekilde kapat
+        try:
+            # Teklif tutarını güncelle
+            update_teklif_tutar(self.teklif_id)
+            QMessageBox.information(self, "Başarılı", "Teklif başarıyla kaydedildi.")
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Teklif kaydedilirken bir hata oluştu: {str(e)}")
 
     def islem_sil(self):
         """Seçili işlemi tablodan siler."""
         selected = self.islem_table.currentRow()
         if selected >= 0:
+            if self.teklif_id:
+                delete_teklif_islem(self.teklif_id, selected)
+                update_teklif_tutar(self.teklif_id)
+
             self.islem_table.removeRow(selected)
             self.guncelle_islem_ozeti()
         else:
             QMessageBox.warning(self, "Uyarı", "Lütfen silmek için bir işlem seçin!")
 
-class BilgilendirmePenceresi(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Bilgilendirme")
-        self.setFixedSize(350, 120)
-        layout = QVBoxLayout()
-        label = QLabel("Emir oluşturuldu, açık servislerde görüntüleyebilirsiniz.")
-        label.setStyleSheet("font-size: 15px; padding: 12px;")
-        label.setWordWrap(True)
-        layout.addWidget(label)
+    def teklifi_sil(self):
+        """Teklifi ve ilişkili işlemleri siler."""
+        if not self.teklif_id:
+            QMessageBox.warning(self, "Uyarı", "Teklif ID bulunamadı!")
+            return
 
-        # Tamam butonunu sağa yasla ve küçült
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_tamam = QPushButton("Tamam")
-        btn_tamam.setFixedSize(80, 28)
-        btn_tamam.clicked.connect(self.accept)
-        btn_layout.addWidget(btn_tamam)
-        layout.addLayout(btn_layout)
+        # Silme işlemi için onay al
+        reply = QMessageBox.question(
+            self, 
+            "Teklif Silme Onayı",
+            "Bu teklifi ve tüm işlemlerini silmek istediğinizden emin misiniz?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
 
-        self.setLayout(layout)
+        if reply == QMessageBox.Yes:
+            try:
+                # Teklifi sil
+                delete_teklif(self.teklif_id)
+                QMessageBox.information(self, "Başarılı", "Teklif başarıyla silindi.")
+                self.close()
+                if self.dashboard_ref:
+                    self.dashboard_ref.show()
+            except Exception as e:
+                QMessageBox.critical(self, "Hata", f"Teklif silinirken bir hata oluştu: {str(e)}")
 
-class UyariPenceresi(QDialog):
-    def __init__(self, mesaj, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Uyarı")
-        self.setFixedSize(350, 120)
-        layout = QVBoxLayout()
-        label = QLabel(mesaj)
-        label.setStyleSheet("font-size: 15px; padding: 12px;")
-        label.setWordWrap(True)
-        layout.addWidget(label)
+    def load_teklif_details(self):
+        """Teklif detaylarını yükler ve formu doldurur."""
+        try:
+            # Teklif detaylarını al
+            teklif_details = get_teklif_details(self.teklif_no)
+            if not teklif_details:
+                raise Exception("Teklif detayları bulunamadı!")
 
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_tamam = QPushButton("Tamam")
-        btn_tamam.setFixedSize(80, 28)
-        btn_tamam.clicked.connect(self.accept)
-        btn_layout.addWidget(btn_tamam)
-        layout.addLayout(btn_layout)
+            # Cari bilgilerini doldur
+            self.set_cari_bilgileri(
+                cari_kodu=teklif_details['teklif']['cari_kodu'],
+                cari_unvani=teklif_details['teklif']['cari_kodu'],  # Cari ünvanı için ayrı bir alan yok
+                telefon=teklif_details['cari']['cep_telefonu'] or "",
+                cari_tipi=teklif_details['cari']['cari_tipi'] or ""
+            )
 
-        self.setLayout(layout)
+            # Araç bilgilerini doldur
+            self.set_arac_bilgileri(
+                plaka=teklif_details['teklif']['plaka'],
+                arac_tipi=teklif_details['arac']['arac_tipi'] or "",
+                model_yili=str(teklif_details['arac']['model_yili']) if teklif_details['arac']['model_yili'] else "",
+                marka=teklif_details['arac']['marka'] or "",
+                model=teklif_details['arac']['model'] or ""
+            )
+
+            # Teklif işlemlerini tabloya ekle
+            for islem in teklif_details.get('islemler', []):
+                row_count = self.islem_table.rowCount()
+                self.islem_table.insertRow(row_count)
+                self.islem_table.setItem(row_count, 0, QTableWidgetItem(islem['islem_aciklama']))
+                self.islem_table.setItem(row_count, 1, QTableWidgetItem(f"{islem['islem_tutari']:.2f}"))
+                self.islem_table.setItem(row_count, 2, QTableWidgetItem(f"{islem['kdv_orani']:.2f}"))
+                self.islem_table.setItem(row_count, 3, QTableWidgetItem(f"{islem['kdv_tutari']:.2f}"))
+                self.islem_table.setItem(row_count, 4, QTableWidgetItem(islem['aciklama']))
+
+            # İşlem özetini güncelle
+            self.guncelle_islem_ozeti()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Teklif detayları yüklenirken bir hata oluştu: {str(e)}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    form = ServisForm()
+    form = TeklifForm()
     form.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec_()) 

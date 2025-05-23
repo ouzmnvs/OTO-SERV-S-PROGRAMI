@@ -320,7 +320,17 @@ class CloseServiceForm(QWidget):
             telefon = self.table.item(selected_row, 4).text()
             toplam_tutar = float(self.table.item(selected_row, 6).text().replace(",", "").replace(" TL", ""))
 
-            odeme_form = OdemeAlForm(servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, self, plaka=plaka)
+            odeme_form = OdemeAlForm(
+                servis_id=servis_id,
+                cari_kodu=cari_kodu,
+                cari_ad_unvan=cari_ad_unvan,
+                telefon=telefon,
+                toplam_tutar=toplam_tutar,
+                parent=self,
+                plaka=plaka,
+                odeme_kaynagi="SERVIS",
+                kaynak_id=servis_id
+            )
             if odeme_form.exec_() == QDialog.Accepted:
                 self.load_closed_services_to_table()
         except Exception as e:

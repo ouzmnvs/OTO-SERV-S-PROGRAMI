@@ -82,8 +82,8 @@ class OpenServiceForm(QWidget):
         ana_layout.addLayout(filtre_layout)
 
         # Tablo
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Servis ID", "Cari Kodu", "Cari Ünvanı", "Plaka", "Tarih", "Tutar"])
+        self.table = QTableWidget(0, 7)
+        self.table.setHorizontalHeaderLabels(["Servis ID", "Cari Kodu", "Cari Ünvanı", "Plaka", "Tarih", "Tutar", "Aracı Getiren"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -139,13 +139,14 @@ class OpenServiceForm(QWidget):
         open_services = load_open_services()
         self.table.setRowCount(len(open_services))  # Satır sayısını ayarla
 
-        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum) in enumerate(open_services):
+        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi) in enumerate(open_services):
             self.table.setItem(row, 0, QTableWidgetItem(str(servis_id)))
             self.table.setItem(row, 1, QTableWidgetItem(cari_kodu))
             self.table.setItem(row, 2, QTableWidgetItem(cari_unvan))
             self.table.setItem(row, 3, QTableWidgetItem(plaka))
             self.table.setItem(row, 4, QTableWidgetItem(tarih))
             self.table.setItem(row, 5, QTableWidgetItem(f"{tutar:.2f}"))
+            self.table.setItem(row, 6, QTableWidgetItem(arac_getiren_kisi or ""))  # None ise boş string göster
 
     def kaydi_duzenle(self):
         selected_row = self.table.currentRow()
@@ -177,9 +178,18 @@ class OpenServiceForm(QWidget):
 
         # Tablo verilerinden servis ID'sini al
         servis_id = self.table.item(selected_row, 0).text()
-
-        # Servisi kapat
-        close_service(servis_id)
+        
+        # Servis detaylarını al
+        details = get_service_full_details(servis_id)
+        if not details:
+            QMessageBox.warning(self, "Hata", "Servis detayları bulunamadı!")
+            return
+            
+        # Toplam tutarı al
+        toplam_tutar = details["servis"]["servis_tutar"]
+        
+        # Servisi kapat ve kapanış tutarını güncelle
+        close_service(servis_id, toplam_tutar)
 
         # Tabloyu güncelle
         self.load_open_services_to_table()

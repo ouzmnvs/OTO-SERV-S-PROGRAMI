@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QDate
 # from database_progress import odeme_al
 class OdemeAlForm(QDialog):
-    def __init__(self, servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, parent=None, plaka=""):
+    def __init__(self, servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, parent=None, plaka="", odeme_kaynagi="SERVIS", kaynak_id=None):
         super().__init__(parent)
         self.setWindowTitle("Ödeme Alma Formu")
         self.setFixedSize(400, 400)
@@ -14,7 +14,9 @@ class OdemeAlForm(QDialog):
         self.cari_ad_unvan = cari_ad_unvan
         self.telefon = telefon
         self.toplam_tutar = toplam_tutar
-        self.plaka = plaka  # Plaka bilgisini sakla
+        self.plaka = plaka
+        self.odeme_kaynagi = odeme_kaynagi  # 'SERVIS' veya 'TEKLIF'
+        self.kaynak_id = kaynak_id  # servis_id veya teklif_id
 
         self.init_ui()
 
@@ -87,7 +89,9 @@ class OdemeAlForm(QDialog):
                 self.odeme_tipi.currentText(),
                 self.aciklama.text(),
                 self.cari_ad_unvan,
-                self.plaka
+                self.plaka,
+                self.odeme_kaynagi,
+                self.kaynak_id
             )
 
             QMessageBox.information(self, "Başarılı", "Ödeme başarıyla kaydedildi.")
@@ -97,7 +101,7 @@ class OdemeAlForm(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
 
-def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka):
+def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka, odeme_kaynagi="SERVIS", kaynak_id=None):
     import sqlite3
     from datetime import datetime
     try:
@@ -105,15 +109,24 @@ def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, p
         cursor = conn.cursor()
         tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute("""
-            INSERT INTO KASA (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama))
+            INSERT INTO KASA (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama, odeme_kaynagi, kaynak_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (servis_id, cari_kodu, cari_ad_unvan, plaka, tarih, tutar, odeme_tipi, aciklama, odeme_kaynagi, kaynak_id))
+        
         # Sadece kalan borcu güncelle
-        cursor.execute("""
-            UPDATE servisler
-            SET servis_tutar = servis_tutar - ?
-            WHERE id = ?
-        """, (tutar, servis_id))
+        if odeme_kaynagi == "SERVIS":
+            cursor.execute("""
+                UPDATE servisler
+                SET servis_tutar = servis_tutar - ?
+                WHERE id = ?
+            """, (tutar, servis_id))
+        elif odeme_kaynagi == "TEKLIF":
+            cursor.execute("""
+                UPDATE teklifler
+                SET toplam_tutar = toplam_tutar - ?
+                WHERE id = ?
+            """, (tutar, kaynak_id))
+            
         conn.commit()
     except sqlite3.Error as e:
         print(f"Ödeme kaydedilemedi: {e}")

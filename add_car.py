@@ -136,12 +136,10 @@ class AddCarForm(QDialog):
         self.yakit_cinsi = QComboBox()
         self.yakit_cinsi.addItems(["", "Benzin", "Dizel", "LPG", "Benzin/LPG", "Hybrid", "Elektrik"])
         add_row(QLabel("Yakıt Cinsi"), self.yakit_cinsi, 9)
-        self.getiren_kisi = QLineEdit()
-        add_row(QLabel("Getiren Kişi"), self.getiren_kisi, 10)
         self.son_bakim_tarihi = QLineEdit()
-        add_row(QLabel("Son Bakım Tarihi"), self.son_bakim_tarihi, 11)
+        add_row(QLabel("Son Bakım Tarihi"), self.son_bakim_tarihi, 10)
         self.aciklama = QLineEdit()
-        add_row(QLabel("Açıklama"), self.aciklama, 12)
+        add_row(QLabel("Açıklama"), self.aciklama, 11)
 
         # Ruhsat Fotoğrafı
         lbl_ruhsat_foto = QLabel("Ruhsat Fotoğrafı")
@@ -150,8 +148,8 @@ class AddCarForm(QDialog):
         self.ruhsat_foto_btn.setStyleSheet("font-size: 15px; padding: 6px;")
         self.ruhsat_foto_btn.setMinimumHeight(32)
         self.ruhsat_foto_btn.clicked.connect(self.select_photo)
-        arac_layout.addWidget(lbl_ruhsat_foto, 13, 0)
-        arac_layout.addWidget(self.ruhsat_foto_btn, 13, 1, 1, 2)
+        arac_layout.addWidget(lbl_ruhsat_foto, 12, 0)
+        arac_layout.addWidget(self.ruhsat_foto_btn, 12, 1, 1, 2)
 
         arac_group.setLayout(arac_layout)
 
@@ -200,7 +198,6 @@ class AddCarForm(QDialog):
         motor_hacmi = self.motor_hacmi.text().strip()
         motor_gucu = self.motor_gucu.text().strip()
         yakit_cinsi = self.yakit_cinsi.currentText().strip()
-        getiren_kisi = self.getiren_kisi.text().strip()
         son_bakim_tarihi = self.son_bakim_tarihi.text().strip()
         aciklama = self.aciklama.text().strip()
         ruhsat_foto = self.ruhsat_foto_path
@@ -236,11 +233,11 @@ class AddCarForm(QDialog):
                 cursor.execute("""
                     UPDATE araclar SET
                         cari_kodu=?, marka=?, model=?, model_yili=?, motor_no=?, sasi_no=?, arac_tipi=?,
-                        motor_hacmi=?, motor_gucu_kw=?, yakit_cinsi=?, getiren_kisi=?, son_bakim_tarihi=?, aciklama=?, ruhsat_foto=?
+                        motor_hacmi=?, motor_gucu_kw=?, yakit_cinsi=?, son_bakim_tarihi=?, aciklama=?, ruhsat_foto=?
                     WHERE plaka=?
                 """, (
                     cari_kodu, marka, model, model_yili, motor_no, sasi_no, arac_tipi,
-                    motor_hacmi, motor_gucu, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto,
+                    motor_hacmi, motor_gucu, yakit_cinsi, son_bakim_tarihi, aciklama, ruhsat_foto,
                     eski_plaka
                 ))
             else:
@@ -248,11 +245,11 @@ class AddCarForm(QDialog):
                 cursor.execute("""
                     INSERT INTO araclar (
                         cari_kodu, plaka, marka, model, model_yili, motor_no, sasi_no, arac_tipi,
-                        motor_hacmi, motor_gucu_kw, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        motor_hacmi, motor_gucu_kw, yakit_cinsi, son_bakim_tarihi, aciklama, ruhsat_foto
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     cari_kodu, plaka, marka, model, model_yili, motor_no, sasi_no, arac_tipi,
-                    motor_hacmi, motor_gucu, yakit_cinsi, getiren_kisi, son_bakim_tarihi, aciklama, ruhsat_foto
+                    motor_hacmi, motor_gucu, yakit_cinsi, son_bakim_tarihi, aciklama, ruhsat_foto
                 ))
             conn.commit()
             basarili_kayit = True

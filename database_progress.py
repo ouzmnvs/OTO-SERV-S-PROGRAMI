@@ -74,7 +74,7 @@ def load_car_list_by_cari(cari_kodu):
 def load_open_services():
     """
     servis_durumu 'Açık' olan servisleri döndürür.
-    (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum)
+    (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi)
     """
     conn = sqlite3.connect("oto_servis.db")
     cursor = conn.cursor()
@@ -86,7 +86,8 @@ def load_open_services():
             s.plaka,
             s.servis_tarihi,
             s.servis_tutar,
-            s.servis_durumu
+            s.servis_durumu,
+            s.arac_getiren_kisi
         FROM servisler s
         LEFT JOIN cariler c ON s.cari_kodu = c.cari_kodu
         WHERE s.servis_durumu = 'Açık'
@@ -99,7 +100,7 @@ def load_open_services():
 def load_closed_services():
     """
     servis_durumu 'Kapalı' olan servisleri döndürür.
-    (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum)
+    (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi)
     """
     conn = sqlite3.connect("oto_servis.db")
     cursor = conn.cursor()
@@ -111,7 +112,8 @@ def load_closed_services():
             s.plaka,
             s.servis_tarihi,
             s.servis_tutar,
-            s.servis_durumu
+            s.servis_durumu,
+            s.arac_getiren_kisi
         FROM servisler s
         LEFT JOIN cariler c ON s.cari_kodu = c.cari_kodu
         WHERE s.servis_durumu = 'Kapalı'
@@ -121,30 +123,32 @@ def load_closed_services():
     conn.close()
     return result
 
-def close_service(servis_id):
+def close_service(servis_id, servis_kapanis_tutar):
     """
-    Verilen servis_id'li servisin durumunu 'Kapalı' yapar.
+    Verilen servis_id'li servisin durumunu 'Kapalı' yapar ve kapanış tutarını kaydeder.
     """
     conn = sqlite3.connect("oto_servis.db")
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE servisler
-        SET servis_durumu = 'Kapalı'
+        SET servis_durumu = 'Kapalı',
+            servis_kapanis_tutar = ?,
+            servis_kapanis_tarihi = date('now')
         WHERE id = ?
-    """, (servis_id,))
+    """, (servis_kapanis_tutar, servis_id))
     conn.commit()
     conn.close()
 
-def add_servis(cari_kodu, plaka, servis_tarihi, aciklama):
+def add_servis(cari_kodu, plaka, servis_tarihi, aciklama, arac_getiren_kisi):
     """
     Yeni bir servis kaydı oluşturur ve servis_id döndürür.
     """
     conn = sqlite3.connect("oto_servis.db")
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO servisler (cari_kodu, plaka, servis_tarihi, aciklama, servis_durumu)
-        VALUES (?, ?, ?, ?, 'Açık')
-    """, (cari_kodu, plaka, servis_tarihi, aciklama))
+        INSERT INTO servisler (cari_kodu, plaka, servis_tarihi, aciklama, servis_durumu, arac_getiren_kisi)
+        VALUES (?, ?, ?, ?, 'Açık', ?)
+    """, (cari_kodu, plaka, servis_tarihi, aciklama, arac_getiren_kisi))
     servis_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -188,7 +192,7 @@ def get_service_full_details(servis_id):
 
     # Servis bilgisi
     cursor.execute("""
-        SELECT id, cari_kodu, plaka, servis_tarihi, servis_tutar, servis_durumu, aciklama
+        SELECT id, cari_kodu, plaka, servis_tarihi, servis_tutar, servis_durumu, aciklama, arac_getiren_kisi
         FROM servisler
         WHERE id = ?
     """, (servis_id,))
@@ -204,7 +208,8 @@ def get_service_full_details(servis_id):
         "servis_tarihi": servis[3],
         "servis_tutar": servis[4],
         "servis_durumu": servis[5],
-        "aciklama": servis[6]
+        "aciklama": servis[6],
+        "arac_getiren_kisi": servis[7]
     }
 
     # Cari bilgisi
@@ -350,4 +355,236 @@ def load_servis_kayitlari_by_plaka(plaka):
     result = cursor.fetchall()
     conn.close()
     return result
+
+def add_teklif(teklif_no, cari_kodu, plaka, teklif_tarihi, gecerlilik_tarihi, 
+               odeme_sekli, odeme_vade_gun, teklif_veren_personel, teklif_alan, aciklama):
+    """
+    Yeni bir teklif kaydı oluşturur ve teklif_id döndürür.
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO teklifler (
+            teklif_no, cari_kodu, plaka, teklif_tarihi, gecerlilik_tarihi,
+            odeme_sekli, odeme_vade_gun, teklif_veren_personel, teklif_alan, aciklama
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (teklif_no, cari_kodu, plaka, teklif_tarihi, gecerlilik_tarihi,
+          odeme_sekli, odeme_vade_gun, teklif_veren_personel, teklif_alan, aciklama))
+    teklif_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return teklif_id
+
+def update_teklif_durumu():
+    """
+    Tüm tekliflerin durumunu günceller.
+    Geçerlilik tarihi geçmiş teklifleri 'Geçerlilik tarihi doldu' olarak işaretler.
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    
+    # Bugünün tarihini al
+    from datetime import datetime
+    bugun = datetime.now().strftime("%Y-%m-%d")
+    
+    # Geçerlilik tarihi geçmiş teklifleri güncelle
+    cursor.execute("""
+        UPDATE teklifler 
+        SET teklif_durumu = 'Geçerlilik tarihi doldu'
+        WHERE gecerlilik_tarihi < ? AND teklif_durumu = 'Açık'
+    """, (bugun,))
+    
+    conn.commit()
+    conn.close()
+
+def load_teklifler():
+    """
+    Tüm teklifleri getirir.
+    Dönüş: [(teklif_no, cari_kodu, cari_unvan, plaka, teklif_tarihi, gecerlilik_tarihi, teklif_alan, toplam_tutar, teklif_durumu), ...]
+    """
+    # Önce teklif durumlarını güncelle
+    update_teklif_durumu()
+    
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 
+            t.teklif_no,
+            t.cari_kodu,
+            c.cari_ad_unvan,
+            t.plaka,
+            t.teklif_tarihi,
+            t.gecerlilik_tarihi,
+            t.teklif_alan,
+            t.toplam_tutar,
+            t.teklif_durumu
+        FROM teklifler t
+        LEFT JOIN cariler c ON t.cari_kodu = c.cari_kodu
+        ORDER BY t.teklif_tarihi DESC
+    """)
+    result = cursor.fetchall()
+    conn.close()
+    return result
+
+def get_teklif_details(teklif_no):
+    """
+    Teklif detaylarını ve işlemlerini getirir.
+    Dönüş: {
+        "teklif": {...},
+        "cari": {...},
+        "arac": {...},
+        "islemler": [ {...}, ... ]
+    }
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+
+    # Teklif bilgisi
+    cursor.execute("""
+        SELECT t.id, t.teklif_no, t.cari_kodu, t.plaka, t.teklif_tarihi, t.gecerlilik_tarihi,
+               t.odeme_sekli, t.odeme_vade_gun, t.teklif_veren_personel, t.teklif_alan,
+               t.aciklama, t.toplam_tutar,
+               c.cep_telefonu, c.cari_tipi,
+               a.arac_tipi, a.model_yili, a.marka, a.model
+        FROM teklifler t
+        LEFT JOIN cariler c ON t.cari_kodu = c.cari_kodu
+        LEFT JOIN araclar a ON t.plaka = a.plaka
+        WHERE t.teklif_no = ?
+    """, (teklif_no,))
+    teklif = cursor.fetchone()
+    if not teklif:
+        conn.close()
+        return None
+
+    teklif_dict = {
+        "id": teklif[0],
+        "teklif_no": teklif[1],
+        "cari_kodu": teklif[2],
+        "plaka": teklif[3],
+        "teklif_tarihi": teklif[4],
+        "gecerlilik_tarihi": teklif[5],
+        "odeme_sekli": teklif[6],
+        "odeme_vade_gun": teklif[7],
+        "teklif_veren_personel": teklif[8],
+        "teklif_alan": teklif[9],
+        "aciklama": teklif[10],
+        "toplam_tutar": teklif[11]
+    }
+
+    # Cari bilgileri
+    cari_dict = {
+        "cep_telefonu": teklif[12],
+        "cari_tipi": teklif[13]
+    }
+
+    # Araç bilgileri
+    arac_dict = {
+        "arac_tipi": teklif[14],
+        "model_yili": teklif[15],
+        "marka": teklif[16],
+        "model": teklif[17]
+    }
+
+    # Teklif işlemleri
+    cursor.execute("""
+        SELECT id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama
+        FROM teklif_islemler
+        WHERE teklif_id = ?
+    """, (teklif_dict["id"],))
+    islemler = cursor.fetchall()
+    islemler_list = [
+        {
+            "id": row[0],
+            "islem_aciklama": row[1],
+            "islem_tutari": row[2],
+            "kdv_orani": row[3],
+            "kdv_tutari": row[4],
+            "aciklama": row[5]
+        }
+        for row in islemler
+    ]
+
+    conn.close()
+    return {
+        "teklif": teklif_dict,
+        "cari": cari_dict,
+        "arac": arac_dict,
+        "islemler": islemler_list
+    }
+
+def add_teklif_islem(teklif_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama):
+    """
+    Teklif işlemi ekler ve teklif toplam tutarını günceller.
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO teklif_islemler (teklif_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (teklif_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama))
+    conn.commit()
+    conn.close()
+    update_teklif_tutar(teklif_id)  # Teklif tutarını güncelle
+
+def update_teklif_tutar(teklif_id):
+    """
+    Belirtilen teklifin işlemlerinin toplam tutarını hesaplar ve toplam_tutar alanını günceller.
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT SUM(islem_tutari) FROM teklif_islemler WHERE teklif_id = ?
+    """, (teklif_id,))
+    toplam = cursor.fetchone()[0] or 0.0
+    cursor.execute("""
+        UPDATE teklifler SET toplam_tutar = ? WHERE id = ?
+    """, (toplam, teklif_id))
+    conn.commit()
+    conn.close()
+
+def get_teklif_id_by_no(teklif_no):
+    """
+    Teklif numarasına göre teklif ID'sini döndürür.
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM teklifler WHERE teklif_no = ?", (teklif_no,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+def delete_teklif_islem(teklif_id, row_index):
+    """
+    Belirtilen teklifin belirtilen sıradaki işlemini siler.
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    
+    # Önce işlemin ID'sini bul
+    cursor.execute("""
+        SELECT id FROM teklif_islemler 
+        WHERE teklif_id = ? 
+        ORDER BY id 
+        LIMIT 1 OFFSET ?
+    """, (teklif_id, row_index))
+    
+    islem_id = cursor.fetchone()
+    if islem_id:
+        # İşlemi sil
+        cursor.execute("DELETE FROM teklif_islemler WHERE id = ?", (islem_id[0],))
+        conn.commit()
+    
+    conn.close()
+
+def delete_teklif(teklif_id):
+    """
+    Belirtilen teklifi ve ilişkili işlemleri siler.
+    """
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")  # Foreign key constraints'i aktif et
+    cursor.execute("DELETE FROM teklifler WHERE id = ?", (teklif_id,))
+    conn.commit()
+    conn.close()
 
