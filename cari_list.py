@@ -74,7 +74,7 @@ class CariListForm(QWidget):
         filtre_layout = QHBoxLayout()
         filtre_layout.setSpacing(8)
         self.filtre_input = QLineEdit()
-        self.filtre_input.setPlaceholderText("Cari Kodu, Cari Adı")
+        self.filtre_input.setPlaceholderText("Cari Kodu, Cari Adı,plaka")
         self.filtre_input.setMinimumHeight(32)
         self.filtre_input.setStyleSheet("""
             font-size: 16px;
@@ -102,11 +102,13 @@ class CariListForm(QWidget):
         btn_filtrele.setStyleSheet("""
             font-size: 15px; font-weight: 700; background: #e3f2fd; border-radius: 6px; padding: 4px 18px;
         """)
+        btn_filtrele.clicked.connect(self.filtrele)
         btn_temizle = QPushButton(icon('fa5s.sync', color='#fbc02d'), "Temizle")
         btn_temizle.setMinimumHeight(32)
         btn_temizle.setStyleSheet("""
             font-size: 15px; font-weight: 700; background: #fffde7; border-radius: 6px; padding: 4px 18px;
         """)
+        btn_temizle.clicked.connect(self.temizle)
         filtre_layout.addWidget(btn_filtrele)
         filtre_layout.addWidget(btn_temizle)
         ana_layout.addLayout(filtre_layout)
@@ -213,13 +215,19 @@ class CariListForm(QWidget):
 #             self.load_cari_list_to_table()
 
     def yeni_cari_ekle_ac(self):
-        self.add_cari_form = AddCariForm()
-        self.add_cari_form.setWindowModality(Qt.ApplicationModal)
-        self.add_cari_form.setWindowFlag(Qt.Window)
-        self.add_cari_form.setWindowTitle("Yeni Cari Ekle")
-        # Modal olarak aç
-        if self.add_cari_form.exec_() == QDialog.Accepted:
-            self.load_cari_list_to_table()
+        try:
+            self.add_cari_form = AddCariForm()
+            self.add_cari_form.setWindowModality(Qt.ApplicationModal)
+            self.add_cari_form.setWindowFlag(Qt.Window)
+            self.add_cari_form.setWindowTitle("Yeni Cari Ekle")
+            
+            # Modal olarak aç ve sonucu kontrol et
+            if self.add_cari_form.exec_() == QDialog.Accepted:
+                # Yeni cari eklendiğinde listeyi güncelle
+                self.load_cari_list_to_table()
+                QMessageBox.information(self, "Başarılı", "Yeni cari başarıyla eklendi ve liste güncellendi.")
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Yeni cari eklenirken bir hata oluştu:\n{str(e)}")
 
     def kaydi_duzenle_ac(self):
         selected_row = self.table.currentRow()
@@ -267,65 +275,88 @@ class CariListForm(QWidget):
                 QMessageBox.critical(self, "Hata", f"Silme işlemi sırasında hata oluştu:\n{e}")
 
     def pdf_aktar(self):
-        # Türkçe karakter desteği için font kaydı
-        font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-        pdfmetrics.registerFont(TTFont("DejaVu", font_path))
-
-        # PDF dosya adı: {tarih}_cari_listesi.pdf
-        tarih = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-        default_name = f"{tarih}_cari_listesi.pdf"
-        path, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_name, "PDF Files (*.pdf)")
-        if not path:
-            return
-
-        # Tablo başlıkları ve veriler
-        headers = ["Cari Kodu", "Cari Adı / Ünvanı", "Telefon No", "Cari Tipi", "Açıklama", "Toplam Tutar"]
-        data = [headers]
-        for row in range(self.table.rowCount()):
-            data.append([
-                self.table.item(row, 0).text() if self.table.item(row, 0) else "",
-                self.table.item(row, 1).text() if self.table.item(row, 1) else "",
-                self.table.item(row, 2).text() if self.table.item(row, 2) else "",
-                self.table.item(row, 3).text() if self.table.item(row, 3) else "",
-                self.table.item(row, 4).text() if self.table.item(row, 4) else "",
-                self.table.item(row, 5).text() if self.table.item(row, 5) else "",
-            ])
-
-        # PDF oluştur
-        doc = SimpleDocTemplate(path, pagesize=A4)
-        styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name='Turkish', fontName='DejaVu', fontSize=12, leading=16))
-        styles.add(ParagraphStyle(name='TurkishTitle', fontName='DejaVu', fontSize=16, leading=20, alignment=1))
-
-        elements = []
-        elements.append(Paragraph("CARİ LİSTESİ", styles['TurkishTitle']))
-        elements.append(Spacer(1, 18))
-
-        t = Table(data, repeatRows=1, colWidths=[70, 120, 80, 70, 150, 70])
-        t.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'DejaVu'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-            ('GRID', (0, 0), (-1, -1), 0.7, colors.grey),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
-
-        elements.append(Spacer(1, 18))
-        elements.append(Paragraph(f"Toplam Kayıt: {self.table.rowCount()}", styles['Turkish']))
-
         try:
+            # Türkçe karakter desteği için font kaydı
+            font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+            pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+
+            # PDF dosya adı: {tarih}_cari_listesi.pdf
+            tarih = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+            default_name = f"{tarih}_cari_listesi.pdf"
+            path, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_name, "PDF Files (*.pdf)")
+            if not path:
+                return
+
+            # PDF oluştur
+            doc = SimpleDocTemplate(path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            styles.add(ParagraphStyle(name='Turkish', fontName='DejaVu', fontSize=12, leading=16))
+            styles.add(ParagraphStyle(name='TurkishTitle', fontName='DejaVu', fontSize=16, leading=20, alignment=1))
+            styles.add(ParagraphStyle(name='TurkishHeader', fontName='DejaVu', fontSize=14, leading=18, alignment=1))
+
+            elements = []
+
+            # Başlık
+            elements.append(Paragraph("CARİ LİSTESİ", styles['TurkishTitle']))
+            elements.append(Spacer(1, 12))
+
+            # Tarih bilgisi
+            elements.append(Paragraph(f"Oluşturulma Tarihi: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}", styles['Turkish']))
+            elements.append(Spacer(1, 12))
+
+            # Tablo başlıkları
+            headers = ["Cari Kodu", "Cari Adı / Ünvanı", "Telefon No", "Cari Tipi", "Açıklama", "Toplam Tutar"]
+            data = [headers]
+
+            # Tablo verileri
+            toplam_tutar = 0
+            for row in range(self.table.rowCount()):
+                row_data = []
+                for col in range(self.table.columnCount()):
+                    item = self.table.item(row, col)
+                    if item is not None:
+                        if col == 5:  # Toplam Tutar sütunu
+                            try:
+                                tutar = float(item.text())
+                                toplam_tutar += tutar
+                                row_data.append(f"{tutar:,.2f} TL")
+                            except:
+                                row_data.append(item.text())
+                        else:
+                            row_data.append(item.text())
+                    else:
+                        row_data.append("")
+                data.append(row_data)
+
+            # Tablo oluştur
+            t = Table(data, repeatRows=1, colWidths=[70, 120, 80, 70, 150, 70])
+            t.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'DejaVu'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+                ('GRID', (0, 0), (-1, -1), 0.7, colors.grey),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(t)
+
+            # Alt bilgiler
+            elements.append(Spacer(1, 12))
+            elements.append(Paragraph(f"Toplam Kayıt: {self.table.rowCount()}", styles['Turkish']))
+            elements.append(Paragraph(f"Toplam Tutar: {toplam_tutar:,.2f} TL", styles['Turkish']))
+
+            # PDF'i oluştur
             doc.build(elements)
-            QMessageBox.information(self, "PDF Aktarıldı", "Cari listesi başarıyla PDF olarak kaydedildi.")
+            QMessageBox.information(self, "Başarılı", "Cari listesi başarıyla PDF olarak kaydedildi.")
+
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"PDF oluşturulamadı:\n{e}")
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
 #     def servis_hareketleri_ac(self):
 #         selected_row = self.table.currentRow()
@@ -335,6 +366,39 @@ class CariListForm(QWidget):
 #         cari_kodu = self.table.item(selected_row, 0).text()
 #         arac_form = AracListesiForm(cari_kodu, self)
 #         arac_form.exec_()
+
+    def filtrele(self):
+        """Cari listesini filtrele"""
+        arama_metni = self.filtre_input.text().strip().lower()
+        if not arama_metni:
+            self.load_cari_list_to_table()
+            return
+
+        # Tüm satırları gizle
+        for row in range(self.table.rowCount()):
+            self.table.setRowHidden(row, True)
+
+        # Filtreleme yap
+        toplam_tutar = 0
+        gorunen_satir = 0
+        for row in range(self.table.rowCount()):
+            cari_kodu = self.table.item(row, 0).text().lower()
+            cari_adi = self.table.item(row, 1).text().lower()
+            
+            if arama_metni in cari_kodu or arama_metni in cari_adi:
+                self.table.setRowHidden(row, False)
+                toplam_tutar += float(self.table.item(row, 5).text())
+                gorunen_satir += 1
+
+        self.alt_bilgi.setText(
+            f"{gorunen_satir} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:.2f} TL"
+        )
+
+    def temizle(self):
+        """Filtreleri temizle ve tüm listeyi göster"""
+        self.filtre_input.clear()
+        self.filtre_combo.setCurrentIndex(0)
+        self.load_cari_list_to_table()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -310,7 +310,7 @@ def get_service_full_details(servis_id):
 
     # Cari bilgisi
     cursor.execute("""
-        SELECT cari_kodu, cari_ad_unvan, cep_telefonu, cari_tipi, aciklama
+        SELECT cari_kodu, cari_ad_unvan, cep_telefonu, cari_tipi, aciklama, vergi_no
         FROM cariler
         WHERE cari_kodu = ?
     """, (servis_dict["cari_kodu"],))
@@ -320,7 +320,8 @@ def get_service_full_details(servis_id):
         "cari_ad_unvan": cari[1],
         "cep_telefonu": cari[2],
         "cari_tipi": cari[3],
-        "aciklama": cari[4]
+        "aciklama": cari[4],
+        "vergi_no": cari[5]
     } if cari else {}
 
     # Araç bilgisi

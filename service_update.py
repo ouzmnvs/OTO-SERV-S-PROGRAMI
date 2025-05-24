@@ -1,12 +1,19 @@
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
     QGroupBox, QComboBox, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView,
-    QSizePolicy, QFrame, QMessageBox
+    QSizePolicy, QFrame, QMessageBox, QFileDialog
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import add_islem, load_service_operations, delete_service, update_servis
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+import os
+import datetime
+from pdf_oluşturucu import mevcut_pdf_duzenle
 
 class ServiceUpdateForm(QDialog):
     def __init__(self):
@@ -208,20 +215,25 @@ class ServiceUpdateForm(QDialog):
         # Alt Butonlar
         alt_layout = QHBoxLayout()
         alt_layout.setSpacing(10)
-        btn_kaydi_sil = self._buton("KAYDI SİL", 'fa5s.trash', '#b71c1c')
-        btn_kaydi_sil.clicked.connect(self.kaydi_sil)
-        btn_islem_sil = self._buton("İŞLEMİ SİL", 'fa5s.trash', '#b71c1c')
-        btn_islem_sil.clicked.connect(self.islem_sil)
-        btn_pdf = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
-        btn_pdf.clicked.connect(self.pdf_aktar)
         btn_kaydet = self._buton("KAYDET", 'fa5s.save', '#0288d1')
         btn_kaydet.clicked.connect(self.kaydet_servis)
+
+        btn_islem_sil = self._buton("İŞLEMİ SİL", 'fa5s.trash', '#b71c1c')
+        btn_islem_sil.clicked.connect(self.islem_sil)
+
+        btn_pdf = self._buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
+        btn_pdf.clicked.connect(self.pdf_aktar)
+
+        btn_kaydi_sil = self._buton("KAYDI SİL", 'fa5s.trash', '#b71c1c')
+        btn_kaydi_sil.clicked.connect(self.kaydi_sil)
+
         btn_kapat = self._buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
         btn_kapat.clicked.connect(self.reject)
-        alt_layout.addWidget(btn_kaydi_sil)
+
+        alt_layout.addWidget(btn_kaydet)
         alt_layout.addWidget(btn_islem_sil)
         alt_layout.addWidget(btn_pdf)
-        alt_layout.addWidget(btn_kaydet)
+        alt_layout.addWidget(btn_kaydi_sil)
         alt_layout.addWidget(btn_kapat)
         sag_panel.addLayout(alt_layout)
 
@@ -272,7 +284,8 @@ class ServiceUpdateForm(QDialog):
             self.tbl_islemler.setItem(row, 0, QTableWidgetItem(islem["islem_aciklama"]))
             self.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{islem['islem_tutari']:.2f}"))
             self.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{islem['kdv_orani']:.2f}"))
-            self.tbl_islemler.setItem(row, 3, QTableWidgetItem(islem["aciklama"]))
+            self.tbl_islemler.setItem(row, 3, QTableWidgetItem(f"{islem['kdv_tutari']:.2f}"))
+            self.tbl_islemler.setItem(row, 4, QTableWidgetItem(islem["aciklama"]))
             self.existing_operations.append((
                 islem["id"],
                 islem["islem_aciklama"],
@@ -333,7 +346,89 @@ class ServiceUpdateForm(QDialog):
         self.accept()
 
     def pdf_aktar(self):
-        QMessageBox.information(self, "PDF", "PDF oluşturma işlemi burada yapılacak.")
+        if not self.servis_id:
+            QMessageBox.warning(self, "Uyarı", "Önce bir servis kaydı yüklemelisiniz!")
+            return
+
+        try:
+            # Servis detaylarını al
+            from database_progress import get_service_full_details
+            detaylar = get_service_full_details(self.servis_id)
+            if not detaylar:
+                QMessageBox.warning(self, "Uyarı", "Servis detayları bulunamadı!")
+                return
+
+            # Servis, cari ve araç bilgilerini al
+            servis = detaylar["servis"]
+            cari = detaylar["cari"]
+            arac = detaylar["arac"]
+            islemler = detaylar["islemler"]
+
+            # KDV hesaplamaları
+            servis_tutar_toplam = sum(item['islem_tutari'] for item in islemler)
+            kdv_orani_genel = 0.20
+            kdv_tutari_genel = servis_tutar_toplam * kdv_orani_genel
+            toplam_kdv_haric = servis_tutar_toplam
+            genel_toplam = toplam_kdv_haric + kdv_tutari_genel
+
+            # İşlemleri PDF için hazırla
+            islem_texts = []
+            y_start = 92.5
+            line_height = 3.5
+
+            for i, islem in enumerate(islemler, 1):
+                islem_texts.extend([
+                    (6, y_start - (i * line_height), str(i)),
+                    (18, y_start - (i * line_height), islem["islem_aciklama"]),
+                    (67.5, y_start - (i * line_height), "1"),
+                    (81.5, y_start - (i * line_height), ""),
+                    (88.5, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),
+                    (102, y_start - (i * line_height), "0.0%"),
+                    (110, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")
+                ])
+
+            # PDF için eklemeler sözlüğünü oluştur
+            eklemeler = {
+                'text': [
+                    (95, 155.5, str(servis['id'])),
+                    (54, 155.5, f"{servis['plaka']}"),
+                    (30, 145, f"{cari.get('cari_ad_unvan', '')}"),
+                    (30, 142, f"{cari.get('cep_telefonu', '')}"),
+                    (30, 133.5, f"{arac.get('arac_tipi', '')}"),
+                    (30, 130.5, f"{arac.get('marka', '')} {arac.get('model', '')}"),
+                    (30, 126.5, f"{arac.get('model_yili', '')}"),
+                    (72, 133.5, f"{arac.get('sasi_no', 'XXXXXXXX')}"),
+                    (72, 130.5, f"{arac.get('motor_no', 'XXXXXX')}"),
+                    (72, 127, f"01.05.2019"),
+                    (35, 122, f"{servis['servis_tarihi']}"),
+                    (35, 114.5, f"{servis['servis_tarihi']}"),
+                    (105, 41, f"₺ {toplam_kdv_haric:,.2f} TL"),
+                    (105, 38, f"₺ {kdv_tutari_genel:,.2f} TL"),
+                    (105, 35, f"₺ {genel_toplam:,.2f} TL")
+                ]
+            }
+
+            # İşlemleri eklemeler listesine ekle
+            eklemeler['text'].extend(islem_texts)
+
+            # Dosya kaydetme dialogunu göster
+            default_filename = f"servis_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "PDF Dosyasını Kaydet",
+                default_filename,
+                "PDF Dosyaları (*.pdf)"
+            )
+
+            if file_path:  # Eğer kullanıcı bir dosya yolu seçtiyse
+                # PDF'i oluştur
+                mevcut_pdf_duzenle("classiccar.pdf", file_path, eklemeler, font_size=6)
+                QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
+            else:
+                QMessageBox.information(self, "Bilgi", "PDF oluşturma işlemi iptal edildi.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
     def islem_ekle(self):
         aciklama = self.input_islem_aciklama.text().strip()

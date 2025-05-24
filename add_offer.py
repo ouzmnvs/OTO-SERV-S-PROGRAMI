@@ -4,8 +4,12 @@ from PyQt5.QtWidgets import (
 )
 from qtawesome import icon  # qtawesome kütüphanesini ekleyin
 import sys
-from database_progress import load_teklifler, delete_teklif, get_teklif_id_by_no
+from database_progress import load_teklifler, delete_teklif, get_teklif_id_by_no, get_teklif_details
 from PyQt5.QtCore import Qt
+from pdf_oluşturucu import mevcut_pdf_duzenle
+import os
+from reportlab.lib.units import mm
+from reportlab.lib.pagesizes import A4
 
 
 class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştirildi
@@ -164,6 +168,8 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
         self.btn_delete.clicked.connect(self.delete_selected_teklif)
         # Ödeme al butonuna tıklama olayını bağla
         self.btn_odeme_al.clicked.connect(self.odeme_al_ac)
+        # PDF Aktar butonuna tıklama olayını bağla
+        self.btn_view_details.clicked.connect(self.pdf_aktar_teklif)
 
     def open_add_new_offer(self):
         from add_new_offer import AddNewOfferForm
@@ -285,6 +291,110 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
                 self.load_teklif_data()
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Bir hata oluştu: {e}")
+
+    def pdf_aktar_teklif(self):
+        selected_rows = self.table.selectedItems()
+        if not selected_rows:
+            QMessageBox.warning(self, "Uyarı", "Lütfen PDF oluşturmak için bir teklif seçiniz!")
+            return
+
+        row = selected_rows[0].row()
+        teklif_no = self.table.item(row, 0).text()
+
+        try:
+            # Veritabanından teklif detaylarını al
+            detaylar = get_teklif_details(teklif_no)
+            if not detaylar:
+                QMessageBox.warning(self, "Uyarı", "Teklif detayları bulunamadı!")
+                return
+
+            # Teklif, cari ve araç bilgilerini al
+            teklif = detaylar["teklif"]
+            cari = detaylar["cari"]
+            arac = detaylar["arac"]
+            islemler = detaylar["islemler"]
+
+            # Bilgileri kontrol et ve göster
+            print("\n=== TEKLİF DETAYLARI ===")
+            print(f"Teklif No: {teklif['teklif_no']}")
+            print(f"Plaka: {teklif['plaka']}")
+            print(f"\n=== CARİ BİLGİLERİ ===")
+            print(f"Cari Adı Ünvanı: {cari['cari_ad_unvan']}")
+            print(f"Cep Telefonu: {cari['cep_telefonu']}")
+            print(f"\n=== İŞLEMLER ===")
+            for islem in islemler:
+                print(f"İşlem: {islem['islem_aciklama']} - Tutar: {islem['islem_tutari']:,.2f} TL")
+
+            # KDV ve Toplam hesaplamaları
+            genel_toplam = teklif["toplam_tutar"]
+            kdv_orani = 0.20  # %20 KDV
+            kdv_haric_toplam = genel_toplam / (1 + kdv_orani)
+            kdv_tutari = genel_toplam - kdv_haric_toplam
+
+            print(f"\n=== TUTAR BİLGİLERİ ===")
+            print(f"KDV Hariç Toplam: {kdv_haric_toplam:,.2f} TL")
+            print(f"KDV Tutarı: {kdv_tutari:,.2f} TL")
+            print(f"Genel Toplam: {genel_toplam:,.2f} TL")
+
+            # İşlemleri PDF için hazırla
+            islem_texts = []
+            y_baslangic = 119.5  # İlk işlem satırının Y koordinatı
+            satir_yuksekligi = 3.5  # Her işlem satırı arasındaki Y mesafesi
+
+            for i, islem in enumerate(islemler, 1):
+                islem_texts.extend([
+                    # Sıra No
+                    (7.5, y_baslangic - (i - 1) * satir_yuksekligi, str(i)),
+                    # İşlem Açıklaması
+                    (29.5, y_baslangic - (i - 1) * satir_yuksekligi, islem["islem_aciklama"]),
+                    # Miktarı
+                    (77.5, y_baslangic - (i - 1) * satir_yuksekligi, "1"),
+                    # Birimi
+                    (87.5, y_baslangic - (i - 1) * satir_yuksekligi, "ADET"),
+                    # Birim Fiyat
+                    (96.5, y_baslangic - (i - 1) * satir_yuksekligi, f"{islem['islem_tutari']:,.2f}"),
+                    # İsk.%
+                    (112, y_baslangic - (i - 1) * satir_yuksekligi, "0.0%"),
+                    # Toplam Fiyat
+                    (120, y_baslangic - (i - 1) * satir_yuksekligi, f"{islem['islem_tutari']:,.2f}")
+                ])
+
+            # PDF için eklemeler sözlüğünü oluştur
+            eklemeler = {
+                'text': [
+                    # 🔴 Teklif No & Plaka (PDF sağ üst tarafı)
+                    (115, 160.8, str(teklif["teklif_no"])),  # Teklif No
+                    (39, 145, f"{teklif['plaka']}"),  # Plaka
+
+                    # 🔵 Cari Bilgileri
+                    (39, 155.5, f"{cari['cari_ad_unvan']}"),
+                    (39, 142, f"{cari['cep_telefonu']}"),
+
+
+                    # 🟣 Tarihler
+                    (110, 164, f"{teklif['teklif_tarihi']}"),
+                    (96.8, 157.5, f"Teklif Geçerlilik: {teklif['gecerlilik_tarihi']}"),
+
+                    # 🧾 Tutar Bilgileri (Sağ alt)
+                    (114, 51.5, f"₺ {kdv_haric_toplam:,.2f} TL"),
+                    (114, 49, f"₺ {0} TL"),
+                    (114, 46.3, f"₺ {kdv_haric_toplam:,.2f} TL"),
+
+                    (114, 43.9, f"₺ {kdv_tutari:,.2f} TL"),
+                    (114, 40.8, f"₺ {genel_toplam:,.2f} TL")
+                ]
+            }
+
+            # İşlemleri eklemeler listesine ekle
+            eklemeler['text'].extend(islem_texts)
+
+            # PDF'i oluştur
+            output_filename = f"teklif_{teklif['teklif_no']}_{teklif['teklif_tarihi']}.pdf"
+            mevcut_pdf_duzenle("teklif.pdf", output_filename, eklemeler, font_size=6)
+            QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu: {output_filename}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu: {str(e)}")
 
     def load_teklif_data(self):
         """Teklif verilerini veritabanından yükler ve tabloya ekler"""

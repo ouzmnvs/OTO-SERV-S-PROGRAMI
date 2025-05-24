@@ -1,12 +1,13 @@
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDateEdit, QToolButton, QMenu, QMessageBox, QDialog
+    QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDateEdit, QToolButton, QMenu, QMessageBox, QDialog, QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from qtawesome import icon
 import sys
-from database_progress import load_closed_services  # Kapalı servisleri yüklemek için fonksiyonu içe aktarın
+from database_progress import load_closed_services, get_service_full_details  # get_service_full_details'i ekleyin
 from odeme_al import OdemeAlForm
-from database_progress import delete_service  # En üste ekleyin
+from database_progress import delete_service
+from pdf_oluşturucu import mevcut_pdf_duzenle
 
 class CloseServiceForm(QWidget):
     def __init__(self):
@@ -43,8 +44,9 @@ class CloseServiceForm(QWidget):
         buton_layout.addWidget(btn_odeme_al)
         buton_layout.addWidget(btn_pdf_aktar)
         buton_layout.addWidget(btn_sayfayi_kapat)
-        btn_odeme_al.clicked.connect(self.odeme_al_ac)  # Doğru bağlantı
-        btn_kaydi_sil.clicked.connect(self.kaydi_sil)  # Kaydı sil fonksiyonunu bağla
+        btn_odeme_al.clicked.connect(self.odeme_al_ac)
+        btn_kaydi_sil.clicked.connect(self.kaydi_sil)
+        btn_pdf_aktar.clicked.connect(self.pdf_aktar)  # PDF aktar fonksiyonunu bağla
         ana_layout.addLayout(buton_layout)
 
         # Filtre alanı
@@ -347,6 +349,95 @@ class CloseServiceForm(QWidget):
             delete_service(servis_id)
             self.load_closed_services_to_table()
             QMessageBox.information(self, "Başarılı", "Servis kaydı silindi.")
+
+    def pdf_aktar(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
+            return
+
+        try:
+            # Seçili satırdan servis ID'sini al
+            servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)
+            
+            # Servis detaylarını getir
+            detaylar = get_service_full_details(servis_id)
+            if not detaylar:
+                QMessageBox.warning(self, "Uyarı", "Servis detayları bulunamadı!")
+                return
+
+            # Servis, cari ve araç bilgilerini al
+            servis = detaylar["servis"]
+            cari = detaylar["cari"]
+            arac = detaylar["arac"]
+            islemler = detaylar["islemler"]
+
+            # KDV hesaplamaları
+            servis_tutar = servis["servis_tutar"]
+            kdv_orani = 0.20  # %20 KDV
+            kdv_tutari = servis_tutar * kdv_orani
+            toplam_tutar = servis_tutar - kdv_tutari  # Toplam tutar = Servis tutar - KDV tutarı
+            genel_toplam = kdv_tutari + toplam_tutar  # Genel toplam = KDV tutarı + Toplam tutar
+
+            # İşlemleri PDF için hazırla
+            islem_texts = []
+            for i, islem in enumerate(islemler, 1):
+                islem_texts.extend([
+                    (6, 92.5 - (i * 3.5), str(i)),
+                    (18, 92.5 - (i * 3.5), islem["islem_aciklama"]),
+                    (67.5, 92.5 - (i * 3.5), f"{islem['islem_tutari']:,.2f}"),
+                    (81.5, 92.5 - (i * 3.5), "1"),
+                    (88.5, 92.5 - (i * 3.5), f"{islem['islem_tutari']:,.2f}"),
+                    (102, 92.5 - (i * 3.5), "0.0%"),
+                    (110, 92.5 - (i * 3.5), f"{islem['islem_tutari']:,.2f}")
+                ])
+            if cari["vergi_no"] is None:
+                cari_vergi_no=""
+            else:
+                cari_vergi_no=cari["vergi_no"]
+            # PDF için eklemeler sözlüğünü oluştur
+            eklemeler = {
+                'text': [
+                    (95, 155.5, str(servis["id"])),
+                    (54, 155.5, f"{servis['plaka']}"),
+                    (26, 148.5, f"{cari['cari_ad_unvan']}"),
+                    (30, 141.2, f"{cari['cep_telefonu']}"),
+                    (30, 140, f"{cari_vergi_no}"),
+                    (30, 133.5, f"{arac['arac_tipi']}"),
+                    (30, 130.5, f"{arac['marka']} {arac['model']}"),
+                    (30, 126.5, f"{arac['model_yili']}"),
+                    (72, 133.5, f"{arac['sasi_no'] or ''}"),
+                    (72, 130.5, f"{arac['motor_no'] or ''}"),
+                    (72, 127, f"01.05.2019"),
+                    (35, 122, f"{servis['servis_tarihi']}"),
+                    (35, 114.5, f"{servis['servis_tarihi']}"),
+                    (105, 41, f"₺ {toplam_tutar:,.2f} TL"),
+                    (105, 38, f"₺ {kdv_tutari:,.2f} TL"),
+                    (105, 35, f"₺ {genel_toplam:,.2f} TL")
+                ]
+            }
+
+            # İşlemleri eklemeler listesine ekle
+            eklemeler['text'].extend(islem_texts)
+
+            # Dosya kaydetme dialogunu göster
+            default_filename = f"servis_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "PDF Dosyasını Kaydet",
+                default_filename,
+                "PDF Dosyaları (*.pdf)"
+            )
+
+            if file_path:  # Eğer kullanıcı bir dosya yolu seçtiyse
+                # PDF'i oluştur
+                mevcut_pdf_duzenle("classiccar.pdf", file_path, eklemeler, font_size=6)
+                QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
+            else:
+                QMessageBox.information(self, "Bilgi", "PDF oluşturma işlemi iptal edildi.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu: {str(e)}")
 
 class OpenServiceForm(QWidget):
     def __init__(self):

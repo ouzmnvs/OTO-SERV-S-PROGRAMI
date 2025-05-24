@@ -76,22 +76,31 @@ class Dashboard(QWidget):
     def closeEvent(self, event):
         """Dashboard kapatıldığında çalışacak fonksiyon"""
         try:
+            # Veritabanı bağlantısını kapat
+            import sqlite3
+            conn = sqlite3.connect("oto_servis.db")
+            conn.close()
+            
             # Klasör yoksa oluştur
             if not os.path.exists(self.backup_path):
                 os.makedirs(self.backup_path)
             
             # Veritabanı dosyasının kaynak ve hedef yolları
             source_db = "oto_servis.db"
-            target_db = os.path.join(self.backup_path, "oto_servis.db")
+            target_db = os.path.join(self.backup_path, f"oto_servis_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
             
             # Veritabanı dosyasını kopyala
             if os.path.exists(source_db):
+                # Eğer hedef dosya varsa önce sil
+                if os.path.exists(target_db):
+                    os.remove(target_db)
                 shutil.copy2(source_db, target_db)
                 print(f"Veritabanı başarıyla yedeklendi: {target_db}")
             
             event.accept()
         except Exception as e:
             print(f"Veritabanı yedekleme hatası: {str(e)}")
+            QMessageBox.critical(self, "Hata", f"Veritabanı yedekleme sırasında hata oluştu:\n{str(e)}")
             event.accept()
 
     def resize_or_center(self):

@@ -35,17 +35,18 @@ class AddCarForm(QDialog):
         input_style = """
             QLineEdit, QComboBox {
                 font-size: 18px;
-                padding: 8px 12px;
+                padding: 6px 8px;
                 border-radius: 7px;
                 border: 1.5px solid #b0bec5;
                 background: #f7fafd;
+                min-height: 20px;
             }
             QLineEdit:focus, QComboBox:focus {
                 border: 2px solid #1976d2;
                 background: #fff;
             }
         """
-        label_style = "font-size: 16px; font-weight: 600; color: #222;"
+        label_style = "font-size: 16px; font-weight: 600; color: #222; text-align: left; padding-right: 5px;"
         group_style = """
             QGroupBox {
                 font-size: 16px;
@@ -55,6 +56,7 @@ class AddCarForm(QDialog):
                 border-radius: 10px;
                 margin-top: 12px;
                 background: #f5faff;
+                padding: 10px;
             }
             QGroupBox:title {
                 subcontrol-origin: margin;
@@ -68,11 +70,12 @@ class AddCarForm(QDialog):
         cari_group = QGroupBox("Cari Seçimi Yapınız")
         cari_group.setStyleSheet(group_style)
         cari_layout = QGridLayout()
-        cari_layout.setVerticalSpacing(18)   # Alanlar arası dikey boşluk
-        cari_layout.setHorizontalSpacing(12) # Alanlar arası yatay boşluk
+        cari_layout.setVerticalSpacing(15)   # Alanlar arası dikey boşluk artırıldı
+        cari_layout.setHorizontalSpacing(8)  # Alanlar arası yatay boşluk
 
         lbl_cari_kodu = QLabel("Cari Kodu *")
         lbl_cari_kodu.setStyleSheet(label_style)
+        lbl_cari_kodu.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         cari_layout.addWidget(lbl_cari_kodu, 0, 0)
         self.cari_kodu = QLineEdit()
         self.cari_kodu.setStyleSheet(input_style)
@@ -81,11 +84,12 @@ class AddCarForm(QDialog):
         cari_layout.addWidget(self.cari_kodu, 0, 1)
         sec_btn = QPushButton("Seç")
         sec_btn.setMinimumHeight(32)
-        sec_btn.setStyleSheet("font-size:15px; font-weight:700; padding:6px 18px;")
+        sec_btn.setStyleSheet("font-size:15px; font-weight:700; padding:4px 12px;")
         sec_btn.clicked.connect(self.cari_sec_ac)
         cari_layout.addWidget(sec_btn, 0, 2)
         lbl_cari_unvani = QLabel("Cari Ünvanı *")
         lbl_cari_unvani.setStyleSheet(label_style)
+        lbl_cari_unvani.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         cari_layout.addWidget(lbl_cari_unvani, 1, 0)
         self.cari_unvani = QLineEdit()
         self.cari_unvani.setStyleSheet(input_style)
@@ -104,11 +108,12 @@ class AddCarForm(QDialog):
         arac_group = QGroupBox("Araç Bilgilerini Giriniz")
         arac_group.setStyleSheet(group_style)
         arac_layout = QGridLayout()
-        arac_layout.setVerticalSpacing(28)  # Araç alanları arası boşluk artırıldı
-        arac_layout.setHorizontalSpacing(16)
+        arac_layout.setVerticalSpacing(15)  # Araç alanları arası boşluk artırıldı
+        arac_layout.setHorizontalSpacing(8)  # Yatay boşluk
 
         def add_row(lbl, widget, row):
             lbl.setStyleSheet(label_style)
+            lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             widget.setStyleSheet(input_style)
             widget.setMinimumHeight(32)
             arac_layout.addWidget(lbl, row, 0)
@@ -144,8 +149,9 @@ class AddCarForm(QDialog):
         # Ruhsat Fotoğrafı
         lbl_ruhsat_foto = QLabel("Ruhsat Fotoğrafı")
         lbl_ruhsat_foto.setStyleSheet(label_style)
+        lbl_ruhsat_foto.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.ruhsat_foto_btn = QPushButton("Fotoğraf Seç")
-        self.ruhsat_foto_btn.setStyleSheet("font-size: 15px; padding: 6px;")
+        self.ruhsat_foto_btn.setStyleSheet("font-size: 15px; padding: 4px;")
         self.ruhsat_foto_btn.setMinimumHeight(32)
         self.ruhsat_foto_btn.clicked.connect(self.select_photo)
         arac_layout.addWidget(lbl_ruhsat_foto, 12, 0)
@@ -158,12 +164,12 @@ class AddCarForm(QDialog):
         btn_layout.addStretch()
         kaydet_btn = QPushButton(icon('fa5s.save', color='deeppink'), "Kaydet")
         kaydet_btn.setFixedWidth(140)
-        kaydet_btn.setMinimumHeight(40)
+        kaydet_btn.setMinimumHeight(32)
         kaydet_btn.setStyleSheet("font-size: 17px; font-weight: bold; background: #1976d2; color: white; border-radius: 7px;")
         kaydet_btn.clicked.connect(self.kaydet_tiklandi)
         iptal_btn = QPushButton(icon('fa5s.times', color='darkred'), "İptal")
         iptal_btn.setFixedWidth(140)
-        iptal_btn.setMinimumHeight(40)
+        iptal_btn.setMinimumHeight(32)
         iptal_btn.setStyleSheet("font-size: 17px; font-weight: bold; background: #b71c1c; color: white; border-radius: 7px;")
         iptal_btn.clicked.connect(self.iptal_tiklandi)
         btn_layout.addWidget(kaydet_btn)

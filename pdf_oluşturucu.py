@@ -4,6 +4,9 @@ from reportlab.lib.units import mm
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import fitz  # PyMuPDF
+from reportlab.pdfgen import canvas
+from io import BytesIO
 
 # DejaVuSans fontunu kaydet
 pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
@@ -88,5 +91,60 @@ def teklif_pdf_olustur(dosya_adi="teklif_formu.pdf"):
 
     c.save()
 
-if __name__ == "__main__":
-    teklif_pdf_olustur()
+def mevcut_pdf_duzenle(kaynak_pdf, hedef_pdf, eklemeler, font_size=6):
+    """
+    Mevcut bir PDF dosyasının üzerine eklemeler yapar.
+    
+    Args:
+        kaynak_pdf (str): Düzenlenecek PDF dosyasının yolu
+        hedef_pdf (str): Yeni PDF'in kaydedileceği yol
+        eklemeler (dict): Eklenecek içeriklerin sözlüğü
+            Örnek: {
+                'text': [
+                    (x, y, 'metin'), ...
+                    # Örnek: Toplam, KDV ve Genel Toplam değerleri için (koordinatları ayarlayınız)
+                    # (150, 90, 'TOPLAM_DEĞER'), 
+                    # (150, 84, 'KDV_DEĞER'),
+                    # (150, 78, 'GENEL_TOPLAM_DEĞER')
+                ],
+                'image': [(x, y, 'resim_yolu', genislik, yukseklik), ...]
+            }
+        font_size (int): Metinlerin punto boyutu (varsayılan: 6)
+    """
+    # PDF'i aç
+    doc = fitz.open(kaynak_pdf)
+    
+    # Her sayfayı işle
+    for page in doc:
+        # Metin eklemeleri
+        if 'text' in eklemeler:
+            for x, y, text in eklemeler['text']:
+                # Koordinatları mm'den point'e çevir
+                x_point = x * 2.83465  # 1 mm = 2.83465 points
+                y_point = page.rect.height - (y * 2.83465)  # Y koordinatını ters çevir
+                
+                # Metni ekle
+                page.insert_text(
+                    (x_point, y_point),
+                    str(text),
+                    fontsize=font_size,
+                    fontname="helv"  # Helvetica fontu
+                )
+        
+        # Resim eklemeleri
+        if 'image' in eklemeler:
+            for x, y, img_path, width, height in eklemeler['image']:
+                # Koordinatları ve boyutları mm'den point'e çevir
+                x_point = x * 2.83465
+                y_point = page.rect.height - (y * 2.83465)
+                width_point = width * 2.83465
+                height_point = height * 2.83465
+                
+                # Resmi ekle
+                img_rect = fitz.Rect(x_point, y_point, x_point + width_point, y_point + height_point)
+                page.insert_image(img_rect, filename=img_path)
+    
+    # Değişiklikleri kaydet
+    doc.save(hedef_pdf)
+    doc.close()
+

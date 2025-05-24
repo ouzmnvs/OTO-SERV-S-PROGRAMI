@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit,
-    QDialog,QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, QMessageBox
+    QDialog,QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, QMessageBox, QFileDialog
 )
 from PyQt5.QtCore import Qt
 from qtawesome import icon
@@ -8,6 +8,15 @@ import sys
 from database_progress import load_car_list
 from add_car import AddCarForm  # En üste ekleyin
 from servis_kayitlari import ServisKayitlariForm
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+import os
+import datetime
+import sqlite3
 
 class CarListForm(QDialog):
     def __init__(self, dashboard_ref=None):
@@ -46,7 +55,9 @@ class CarListForm(QDialog):
         btn_servis_kayitlari = self.stil_buton("SERVİS KAYITLARI", 'fa5s.book', '#455a64')
         btn_servis_kayitlari.clicked.connect(self.servis_kayitlari_ac)
         buton_layout.addWidget(btn_servis_kayitlari)
-        buton_layout.addWidget(self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c'))
+        btn_pdf = self.stil_buton("PDF AKTAR", 'fa5s.file-pdf', '#388e3c')
+        btn_pdf.clicked.connect(self.pdf_aktar)  # PDF aktar butonuna bağlantı eklendi
+        buton_layout.addWidget(btn_pdf)
         buton_layout.addStretch()
         btn_kapat = self.stil_buton("SAYFAYI KAPAT", 'fa5s.times', '#b71c1c')
         btn_kapat.clicked.connect(self.sayfayi_kapat)
@@ -58,7 +69,7 @@ class CarListForm(QDialog):
         filtre_layout = QHBoxLayout()
         filtre_layout.setSpacing(8)
         self.filtre_input = QLineEdit()
-        self.filtre_input.setPlaceholderText("Cari Kodu, Cari Adı veya Plaka")
+        self.filtre_input.setPlaceholderText("Cari Kodu, Cari Adı veya Plaka ile ara...")
         self.filtre_input.setMinimumHeight(32)
         self.filtre_input.setStyleSheet("""
             font-size: 16px;
@@ -67,7 +78,6 @@ class CarListForm(QDialog):
             padding: 6px 12px;
             background: #fffbe8;
         """)
-        filtre_layout.addWidget(self.filtre_input)
         btn_filtrele = QPushButton(icon('fa5s.search', color='#1976d2'), "Filtrele")
         btn_filtrele.setMinimumHeight(32)
         btn_filtrele.setStyleSheet("""
@@ -78,6 +88,9 @@ class CarListForm(QDialog):
         btn_temizle.setStyleSheet("""
             font-size: 15px; font-weight: 700; background: #fffde7; border-radius: 6px; padding: 4px 18px;
         """)
+        btn_filtrele.clicked.connect(self.filtrele_araclar)
+        btn_temizle.clicked.connect(self.filtreyi_temizle)
+        filtre_layout.addWidget(self.filtre_input)
         filtre_layout.addWidget(btn_filtrele)
         filtre_layout.addWidget(btn_temizle)
         ana_layout.addLayout(filtre_layout)
@@ -103,7 +116,7 @@ class CarListForm(QDialog):
                 font-weight: bold;
                 font-size: 15px;
                 border: 1px solid #bbb;
-                padding: 6px;
+                padding: 10px;
             }
         """)
 
@@ -112,20 +125,54 @@ class CarListForm(QDialog):
 
         ana_layout.addWidget(self.table)
 
-        # Alt bilgi
-        self.alt_bilgi = QLabel("")
-        self.alt_bilgi.setStyleSheet("font-size: 14px; color: #444; padding: 6px 0 0 8px;")
-        ana_layout.addWidget(self.alt_bilgi)
-
         self.setLayout(ana_layout)
 
-    def load_data_to_table(self):
-        data = load_car_list()
-        self.table.setRowCount(len(data))
-        for row, record in enumerate(data):
-            for col, value in enumerate(record):
-                self.table.setItem(row, col, QTableWidgetItem(str(value) if value is not None else ""))
-        # self.alt_bilgi.setText(f"{len(data)} adet kayıt listeleniyor")
+    def load_data_to_table(self, filter_query=None):
+        conn = None
+        try:
+            conn = sqlite3.connect("oto_servis.db")
+            cursor = conn.cursor()
+            if filter_query:
+                # JOIN cariler tablosu ve filtreleme
+                cursor.execute("""
+                    SELECT
+                        a.cari_kodu, c.cari_ad_unvan, a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model
+                    FROM araclar a
+                    LEFT JOIN cariler c ON a.cari_kodu = c.cari_kodu
+                    WHERE
+                        a.cari_kodu LIKE ? OR
+                        c.cari_ad_unvan LIKE ? OR
+                        a.plaka LIKE ?
+                """, (f'%{filter_query}%', f'%{filter_query}%', f'%{filter_query}%'))
+                data = cursor.fetchall()
+            else:
+                # Tüm verileri yükle
+                cursor.execute("""
+                    SELECT
+                        a.cari_kodu, c.cari_ad_unvan, a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model
+                    FROM araclar a
+                    LEFT JOIN cariler c ON a.cari_kodu = c.cari_kodu
+                """)
+                data = cursor.fetchall()
+
+            self.table.setRowCount(len(data))
+            for row, record in enumerate(data):
+                for col, value in enumerate(record):
+                    self.table.setItem(row, col, QTableWidgetItem(str(value) if value is not None else ""))
+        except Exception as e:
+            QMessageBox.critical(self, "Veritabanı Hatası", f"Araç listesi yüklenirken hata oluştu:\n{e}")
+            data = [] # Hata durumunda boş liste ata
+        finally:
+            if conn:
+                conn.close()
+
+    def filtrele_araclar(self):
+        filter_text = self.filtre_input.text().strip()
+        self.load_data_to_table(filter_text)
+
+    def filtreyi_temizle(self):
+        self.filtre_input.clear()
+        self.load_data_to_table()
 
     def stil_buton(self, text, icon_name, color):
         btn = QPushButton(icon(icon_name, color=color), text)
@@ -201,7 +248,6 @@ class CarListForm(QDialog):
         sonuc = msg.exec_()
 
         if sonuc == QMessageBox.Yes:
-            import sqlite3
             try:
                 conn = sqlite3.connect("oto_servis.db")
                 cursor = conn.cursor()
@@ -248,6 +294,80 @@ class CarListForm(QDialog):
         result = self.add_car_form.exec_()
         if result == QDialog.Accepted:
             self.load_data_to_table()
+
+    def pdf_aktar(self):
+        try:
+            # Türkçe karakter desteği için font kaydı
+            font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+            pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+
+            # PDF dosya adı: {tarih}_arac_listesi.pdf
+            tarih = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+            default_name = f"{tarih}_arac_listesi.pdf"
+            path, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_name, "PDF Files (*.pdf)")
+            if not path:
+                return
+
+            # PDF oluştur
+            doc = SimpleDocTemplate(path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            styles.add(ParagraphStyle(name='Turkish', fontName='DejaVu', fontSize=12, leading=16))
+            styles.add(ParagraphStyle(name='TurkishTitle', fontName='DejaVu', fontSize=16, leading=20, alignment=1))
+            styles.add(ParagraphStyle(name='TurkishHeader', fontName='DejaVu', fontSize=14, leading=18, alignment=1))
+
+            elements = []
+
+            # Başlık
+            elements.append(Paragraph("ARAÇ LİSTESİ", styles['TurkishTitle']))
+            elements.append(Spacer(1, 12))
+
+            # Tarih bilgisi
+            elements.append(Paragraph(f"Oluşturulma Tarihi: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}", styles['Turkish']))
+            elements.append(Spacer(1, 12))
+
+            # Tablo başlıkları
+            headers = ["Cari Kodu", "Cari Adı / Ünvanı", "Araç Plakası", "Araç Tipi", "Model Yılı", "Marka", "Model"]
+            data = [headers]
+
+            # Tablo verileri
+            for row in range(self.table.rowCount()):
+                row_data = []
+                for col in range(self.table.columnCount()):
+                    item = self.table.item(row, col)
+                    if item is not None:
+                        row_data.append(item.text())
+                    else:
+                        row_data.append("")
+                data.append(row_data)
+
+            # Tablo oluştur
+            t = Table(data, repeatRows=1, colWidths=[70, 120, 80, 70, 70, 70, 70])
+            t.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'DejaVu'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+                ('GRID', (0, 0), (-1, -1), 0.7, colors.grey),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(t)
+
+            # Alt bilgiler
+            elements.append(Spacer(1, 12))
+            elements.append(Paragraph(f"Toplam Kayıt: {self.table.rowCount()}", styles['Turkish']))
+
+            # PDF'i oluştur
+            doc.build(elements)
+            QMessageBox.information(self, "Başarılı", "Araç listesi başarıyla PDF olarak kaydedildi.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
 # Dashboard'dan açarken:
 # self.car_list_form = CarListForm(self)

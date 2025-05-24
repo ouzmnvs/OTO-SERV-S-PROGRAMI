@@ -17,6 +17,8 @@ class OpenServiceForm(QWidget):
         super().__init__()
         self.setWindowTitle("Açık Servisler")
         self.init_ui()
+        # Initially load all open services
+        self.load_open_services_to_table(load_open_services())
 
     def init_ui(self):
         # Ekran boyutlarına göre pencereyi orantılı ayarla
@@ -51,10 +53,11 @@ class OpenServiceForm(QWidget):
         buton_layout.addWidget(btn_detay_goruntule)
         buton_layout.addWidget(btn_sayfayi_kapat)
 
-        btn_kaydi_duzenle.clicked.connect(self.kaydi_duzenle)  # Bu satırı ekleyin
-        btn_servisi_kapat.clicked.connect(self.servisi_kapat)  # Bu satırı ekleyin
+        btn_kaydi_duzenle.clicked.connect(self.kaydi_duzenle)
+        btn_servisi_kapat.clicked.connect(self.servisi_kapat)
         btn_yeni_servis.clicked.connect(self.yeni_servis_girisi)
-        btn_kaydi_sil.clicked.connect(self.kaydi_sil)  # Bu satırı ekle
+        btn_kaydi_sil.clicked.connect(self.kaydi_sil)
+        btn_sayfayi_kapat.clicked.connect(self.close)
 
         ana_layout.addLayout(buton_layout)
 
@@ -78,6 +81,10 @@ class OpenServiceForm(QWidget):
 
         filtre_layout.addWidget(btn_filtrele)
         filtre_layout.addWidget(btn_temizle)
+
+        # Connect filter buttons
+        btn_filtrele.clicked.connect(self.filtrele_servisler)
+        btn_temizle.clicked.connect(self.filtreyi_temizle)
 
         ana_layout.addLayout(filtre_layout)
 
@@ -103,15 +110,12 @@ class OpenServiceForm(QWidget):
             }
         """)
 
-        # Açık servisleri tabloya yükle
-        self.load_open_services_to_table()
-
         ana_layout.addWidget(self.table)
 
-        # Alt bilgi
-        alt_bilgi = QLabel("2 adet kayıt listeleniyor | Toplam Tutar: 750,00 TL")
-        alt_bilgi.setStyleSheet("font-size: 14px; color: #444; padding: 6px 0 0 8px;")
-        ana_layout.addWidget(alt_bilgi)
+        # Alt bilgi label'ı burada tanımlanıyor
+        self.alt_bilgi = QLabel("Kayıtlar listeleniyor...") # Initialize alt_bilgi
+        self.alt_bilgi.setStyleSheet("font-size: 14px; color: #444; padding: 6px 0 0 8px;")
+        ana_layout.addWidget(self.alt_bilgi)
 
         self.setLayout(ana_layout)
 
@@ -134,19 +138,54 @@ class OpenServiceForm(QWidget):
         """)
         return btn
 
-    def load_open_services_to_table(self):
-        """Açık servisleri tabloya yükler."""
-        open_services = load_open_services()
-        self.table.setRowCount(len(open_services))  # Satır sayısını ayarla
+    def load_open_services_to_table(self, services):
+        """Açık servisleri tabloya yükler ve alt bilgiyi günceller."""
+        self.table.setRowCount(len(services))  # Satır sayısını ayarla
+        toplam_tutar = 0.0
 
-        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi) in enumerate(open_services):
+        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi) in enumerate(services):
             self.table.setItem(row, 0, QTableWidgetItem(str(servis_id)))
             self.table.setItem(row, 1, QTableWidgetItem(cari_kodu))
             self.table.setItem(row, 2, QTableWidgetItem(cari_unvan))
             self.table.setItem(row, 3, QTableWidgetItem(plaka))
             self.table.setItem(row, 4, QTableWidgetItem(tarih))
             self.table.setItem(row, 5, QTableWidgetItem(f"{tutar:.2f}"))
-            self.table.setItem(row, 6, QTableWidgetItem(arac_getiren_kisi or ""))  # None ise boş string göster
+            self.table.setItem(row, 6, QTableWidgetItem(arac_getiren_kisi or ""))
+            toplam_tutar += tutar
+
+        # Update the alt_bilgi label
+        self.alt_bilgi.setText(f"{len(services)} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:.2f} TL")
+
+    def filtrele_servisler(self):
+        """Input alanındaki metne göre servisleri filtreler."""
+        filter_text = self.filtre_input.text().lower()
+        all_services = load_open_services() # Get all services
+
+        if not filter_text:
+            self.load_open_services_to_table(all_services) # If no filter, show all
+            return
+
+        filtered_services = []
+        for service in all_services:
+            # service is (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi)
+            cari_kodu = str(service[1]).lower()
+            cari_unvan = str(service[2]).lower()
+            plaka = str(service[3]).lower()
+            # We need phone number for filtering, but it's not in load_open_services return
+            # Assuming phone number is not strictly required for now, or we'd need to join with cariler table in load_open_services
+            # For now, filtering only by cari_kodu, cari_unvan, plaka
+            if filter_text in cari_kodu or filter_text in cari_unvan or filter_text in plaka:
+                 filtered_services.append(service)
+            # To add phone number filtering, load_open_services would need to return it, e.g.:
+            # load_open_services() -> (..., c.cep_telefonu)
+            # Then filter_text in str(service[X]).lower() where X is the phone index
+
+        self.load_open_services_to_table(filtered_services)
+
+    def filtreyi_temizle(self):
+        """Filtre input alanını temizler ve tüm servisleri listeler."""
+        self.filtre_input.clear()
+        self.load_open_services_to_table(load_open_services()) # Load all services again
 
     def kaydi_duzenle(self):
         selected_row = self.table.currentRow()
@@ -167,7 +206,7 @@ class OpenServiceForm(QWidget):
         self.servis_update_form.set_service_details(details)
         result = self.servis_update_form.exec_()
         if result == QDialog.Accepted:
-            self.load_open_services_to_table()
+            self.load_open_services_to_table(load_open_services()) # Update table after edit
 
     def servisi_kapat(self):
         selected_row = self.table.currentRow()
@@ -178,21 +217,21 @@ class OpenServiceForm(QWidget):
 
         # Tablo verilerinden servis ID'sini al
         servis_id = self.table.item(selected_row, 0).text()
-        
+
         # Servis detaylarını al
         details = get_service_full_details(servis_id)
         if not details:
             QMessageBox.warning(self, "Hata", "Servis detayları bulunamadı!")
             return
-            
+
         # Toplam tutarı al
         toplam_tutar = details["servis"]["servis_tutar"]
-        
+
         # Servisi kapat ve kapanış tutarını güncelle
         close_service(servis_id, toplam_tutar)
 
         # Tabloyu güncelle
-        self.load_open_services_to_table()
+        self.load_open_services_to_table(load_open_services())
 
         from PyQt5.QtWidgets import QMessageBox
         QMessageBox.information(self, "Başarılı", "Servis başarıyla kapatıldı!")
@@ -201,7 +240,7 @@ class OpenServiceForm(QWidget):
         self.servis_form = ServisForm()
         result = self.servis_form.exec_()  # Modal olarak aç
         if result == QDialog.Accepted:
-            self.load_open_services_to_table()  # Yeni servis eklendiyse tabloyu güncelle
+            self.load_open_services_to_table(load_open_services())  # Yeni servis eklendiyse tabloyu güncelle
 
     def kaydi_sil(self):
         selected_row = self.table.currentRow()
@@ -216,7 +255,7 @@ class OpenServiceForm(QWidget):
         yanit = QMessageBox.question(self, "Onay", "Seçili servisi silmek istediğinize emin misiniz?", QMessageBox.Yes | QMessageBox.No)
         if yanit == QMessageBox.Yes:
             delete_service(servis_id)
-            self.load_open_services_to_table()
+            self.load_open_services_to_table(load_open_services())
             QMessageBox.information(self, "Başarılı", "Servis kaydı silindi.")
 
 if __name__ == "__main__":
