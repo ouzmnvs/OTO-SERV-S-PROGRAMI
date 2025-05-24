@@ -287,14 +287,40 @@ class AddCarForm(QDialog):
         self.cari_unvani.setText(cari_unvani)
 
     def fill_form_with_car_data(self):
-        # Form alanlarını car_data ile doldurun
+        # Form alanlarını car_data ile doldur
+        self.cari_kodu.setText(self.car_data.get("cari_kodu", ""))
         self.plaka.setText(self.car_data.get("plaka", ""))
+        self.arac_tipi.setCurrentText(self.car_data.get("arac_tipi", ""))
+        self.model_yili.setText(str(self.car_data.get("model_yili", "")))
         self.marka.setText(self.car_data.get("marka", ""))
         self.model.setText(self.car_data.get("model", ""))
-        self.model_yili.setText(str(self.car_data.get("model_yili", "")))
-        self.arac_tipi.setCurrentText(self.car_data.get("arac_tipi", ""))
-        self.cari_kodu.setText(self.car_data.get("cari_kodu", ""))
-        # ... diğer alanlarınız varsa ekleyin ...
+        self.sasi_no.setText(self.car_data.get("sasi_no", ""))
+        self.motor_no.setText(self.car_data.get("motor_no", ""))
+        
+        # Motor hacmi ve gücü için doğru alan isimlerini kullan
+        motor_hacmi = self.car_data.get("motor_hacmi", "")
+        motor_gucu = self.car_data.get("motor_gucu_kw", "")
+        
+        # Eğer değerler None ise boş string kullan
+        self.motor_hacmi.setText(str(motor_hacmi) if motor_hacmi is not None else "")
+        self.motor_gucu.setText(str(motor_gucu) if motor_gucu is not None else "")
+        
+        self.yakit_cinsi.setCurrentText(self.car_data.get("yakit_cinsi", ""))
+        self.son_bakim_tarihi.setText(self.car_data.get("son_bakim_tarihi", ""))
+        self.aciklama.setText(self.car_data.get("aciklama", ""))
+        
+        # Cari ünvanını da doldur
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT cari_ad_unvan FROM cariler WHERE cari_kodu = ?", (self.car_data.get("cari_kodu", ""),))
+        result = cursor.fetchone()
+        if result:
+            self.cari_unvani.setText(result[0])
+        conn.close()
+
+        # Düzenleme modunda cari kodu alanını salt okunur yap
+        if self.edit_mode:
+            self.cari_kodu.setReadOnly(True)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

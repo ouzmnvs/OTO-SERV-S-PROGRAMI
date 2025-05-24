@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QGroupBox, QSizePolicy, QFrame, QDesktopWidget,
     QFileDialog, QMessageBox
 )
+import pathlib
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QSize
 from qtawesome import icon
@@ -22,56 +23,15 @@ from add_new_offer import AddNewOfferForm
 from add_offer import AddOfferForm
 from case import CaseTotalsForm
 from create_database import create_database
+from backup_manager import BackupManager
 
 class Dashboard(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("OTO SERVİS PROGRAMI")
         self.resize_or_center()
-        self.load_backup_path()
+        self.backup_manager = BackupManager()
         self.init_ui()
-
-    def load_backup_path(self):
-        """Yedekleme yolunu yapılandırma dosyasından yükler"""
-        self.config_file = "db_config.json"
-        self.default_backup_path = os.path.join(os.path.expanduser("~"), "Desktop", "OTO-SERVIS-DB")
-        
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r') as f:
-                    config = json.load(f)
-                    self.backup_path = config.get('backup_path', self.default_backup_path)
-            else:
-                self.backup_path = self.default_backup_path
-        except Exception:
-            self.backup_path = self.default_backup_path
-
-    def save_backup_path(self):
-        """Yedekleme yolunu yapılandırma dosyasına kaydeder"""
-        try:
-            config = {'backup_path': self.backup_path}
-            with open(self.config_file, 'w') as f:
-                json.dump(config, f)
-        except Exception as e:
-            print(f"Yapılandırma kaydetme hatası: {str(e)}")
-
-    def select_backup_location(self):
-        """Yedekleme konumunu seçmek için dosya diyaloğu açar"""
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Veritabanı Yedekleme Konumunu Seçin",
-            self.backup_path,
-            QFileDialog.ShowDirsOnly
-        )
-        
-        if folder:
-            self.backup_path = folder
-            self.save_backup_path()
-            QMessageBox.information(
-                self,
-                "Bilgi",
-                f"Yedekleme konumu güncellendi:\n{self.backup_path}"
-            )
 
     def closeEvent(self, event):
         """Dashboard kapatıldığında çalışacak fonksiyon"""
@@ -81,27 +41,43 @@ class Dashboard(QWidget):
             conn = sqlite3.connect("oto_servis.db")
             conn.close()
             
-            # Klasör yoksa oluştur
-            if not os.path.exists(self.backup_path):
-                os.makedirs(self.backup_path)
-            
-            # Veritabanı dosyasının kaynak ve hedef yolları
-            source_db = "oto_servis.db"
-            target_db = os.path.join(self.backup_path, f"oto_servis_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
-            
-            # Veritabanı dosyasını kopyala
-            if os.path.exists(source_db):
-                # Eğer hedef dosya varsa önce sil
-                if os.path.exists(target_db):
-                    os.remove(target_db)
-                shutil.copy2(source_db, target_db)
-                print(f"Veritabanı başarıyla yedeklendi: {target_db}")
+            # Yedek al
+            if self.backup_manager.create_backup():
+                QMessageBox.information(
+                    self,
+                    "Bilgi",
+                    "Veritabanı başarıyla yedeklendi!"
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Uyarı",
+                    "Veritabanı yedeklenirken bir hata oluştu!"
+                )
             
             event.accept()
         except Exception as e:
             print(f"Veritabanı yedekleme hatası: {str(e)}")
             QMessageBox.critical(self, "Hata", f"Veritabanı yedekleme sırasında hata oluştu:\n{str(e)}")
             event.accept()
+
+    def select_backup_location(self):
+        """Yedekleme konumunu seçmek için dosya diyaloğu açar"""
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Veritabanı Yedekleme Konumunu Seçin",
+            self.backup_manager.backup_path,
+            QFileDialog.ShowDirsOnly
+        )
+        
+        if folder:
+            self.backup_manager.backup_path = folder
+            self.backup_manager.save_config()
+            QMessageBox.information(
+                self,
+                "Bilgi",
+                f"Yedekleme konumu güncellendi:\n{self.backup_manager.backup_path}"
+            )
 
     def resize_or_center(self):
         ekran = QDesktopWidget().screenGeometry()
@@ -237,6 +213,11 @@ class Dashboard(QWidget):
         btn_db_yol = self.renkli_buton("VERİTABANI YOLU DEĞİŞTİR", 'fa5s.database', 'navy')
         btn_db_yol.clicked.connect(self.select_backup_location)
         finans_layout.addWidget(btn_db_yol)
+
+        # Veritabanı Onar butonunu ayrı tanımla ve sinyal bağla
+        btn_db_onar = self.renkli_buton("VERİTABANI ONAR", 'fa5s.wrench', 'orange')
+        btn_db_onar.clicked.connect(self.repair_database)
+        finans_layout.addWidget(btn_db_onar)
         
         # Sistem Kapat butonunu ayrı tanımla ve sinyal bağla
         btn_sistem_kapat = self.renkli_buton("SİSTEMİ KAPAT", 'fa5s.power-off', 'red')
@@ -302,6 +283,47 @@ class Dashboard(QWidget):
     def open_case_form(self):
         self.case_form = CaseTotalsForm()
         self.case_form.show()
+
+    def repair_database(self):
+        """Veritabanını onarır veya seçilen dosyadan geri yükler"""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Veritabanı Onarım Seçeneği")
+        msg_box.setText("Veritabanı onarımını otomatik olarak (en son yedekten) yapmak mı istiyorsunuz, yoksa bir yedek dosyası seçmek mi istersiniz?")
+        
+        onar_button = msg_box.addButton("Onar", QMessageBox.YesRole)
+        yeni_sec_button = msg_box.addButton("Yeni seç", QMessageBox.NoRole)
+        iptal_button = msg_box.addButton("İptal", QMessageBox.RejectRole)
+        
+        msg_box.setDefaultButton(onar_button)
+        msg_box.exec_()
+
+        if msg_box.clickedButton() == onar_button:
+            # Otomatik onarım (mevcut mantık)
+            success, message = self.backup_manager.repair_database()
+            if success:
+                QMessageBox.information(self, "Başarılı", message)
+            else:
+                QMessageBox.critical(self, "Hata", message)
+
+        elif msg_box.clickedButton() == yeni_sec_button:
+            # Dosya seçerek onarım/geri yükleme
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Yedek Veritabanı Seç",
+                "", # Başlangıç dizini, boş bırakırsanız varsayılanı kullanır
+                "Veritabanı Dosyaları (*.db)"
+            )
+
+            if file_path:
+                success, message = self.backup_manager.restore_database_from_file(file_path)
+                if success:
+                    QMessageBox.information(self, "Başarılı", message)
+                else:
+                    QMessageBox.critical(self, "Hata", message)
+            else:
+                QMessageBox.information(self, "Bilgi", "Dosya seçimi iptal edildi.")
+
+        # Eğer İptal seçilirse bir şey yapma
 
 def check_database():
     """Veritabanının varlığını kontrol eder ve gerekirse oluşturur"""

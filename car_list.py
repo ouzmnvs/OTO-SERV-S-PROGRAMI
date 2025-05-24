@@ -264,7 +264,8 @@ class CarListForm(QDialog):
         if selected_row == -1:
             QMessageBox.warning(self, "Uyarı", "Lütfen bir araç seçin!")
             return
-        # Seçili aracın bilgilerini al
+
+        # Seçili aracın tüm bilgilerini al
         cari_kodu = self.table.item(selected_row, 0).text()
         cari_ad = self.table.item(selected_row, 1).text()
         plaka = self.table.item(selected_row, 2).text()
@@ -272,28 +273,51 @@ class CarListForm(QDialog):
         model_yili = self.table.item(selected_row, 4).text()
         marka = self.table.item(selected_row, 5).text()
         model = self.table.item(selected_row, 6).text()
-        # AddCarForm'u düzenleme modunda aç
-        def tabloyu_guncelle():
-            self.load_data_to_table()
-        self.add_car_form = AddCarForm(
-            dashboard_ref=self,
-            on_saved=tabloyu_guncelle,
-            edit_mode=True,
-            car_data={
-                "cari_kodu": cari_kodu,
-                "cari_ad": cari_ad,
-                "plaka": plaka,
-                "arac_tipi": arac_tipi,
-                "model_yili": model_yili,
-                "marka": marka,
-                "model": model
-            }
-        )
-        self.add_car_form.setWindowModality(Qt.ApplicationModal)
-        self.add_car_form.setWindowFlag(Qt.Window)
-        result = self.add_car_form.exec_()
-        if result == QDialog.Accepted:
-            self.load_data_to_table()
+
+        # Veritabanından araç detaylarını al
+        conn = sqlite3.connect("oto_servis.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                cari_kodu, plaka, arac_tipi, model_yili, marka, model,
+                motor_no, sasi_no, yakit_cinsi, aciklama, motor_hacmi, motor_gucu_kw
+            FROM araclar 
+            WHERE plaka = ?
+        """, (plaka,))
+        arac_detay = cursor.fetchone()
+        conn.close()
+
+        if arac_detay:
+            # AddCarForm'u düzenleme modunda aç
+            def tabloyu_guncelle():
+                self.load_data_to_table()
+
+            self.add_car_form = AddCarForm(
+                dashboard_ref=self,
+                on_saved=tabloyu_guncelle,
+                edit_mode=True,
+                car_data={
+                    "cari_kodu": arac_detay[0],
+                    "plaka": arac_detay[1],
+                    "arac_tipi": arac_detay[2],
+                    "model_yili": arac_detay[3],
+                    "marka": arac_detay[4],
+                    "model": arac_detay[5],
+                    "motor_no": arac_detay[6],
+                    "sasi_no": arac_detay[7],
+                    "yakit_cinsi": arac_detay[8],
+                    "aciklama": arac_detay[9],
+                    "motor_hacmi": arac_detay[10],
+                    "motor_gucu_kw": arac_detay[11]
+                }
+            )
+            self.add_car_form.setWindowModality(Qt.ApplicationModal)
+            self.add_car_form.setWindowFlag(Qt.Window)
+            result = self.add_car_form.exec_()
+            if result == QDialog.Accepted:
+                self.load_data_to_table()
+        else:
+            QMessageBox.warning(self, "Uyarı", "Araç detayları bulunamadı!")
 
     def pdf_aktar(self):
         try:

@@ -1,12 +1,23 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QPushButton, QLabel, QVBoxLayout, QHBoxLayout,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QDateEdit,
-    QDesktopWidget, QFrame
+    QDesktopWidget, QFrame, QFileDialog, QMessageBox, QComboBox
 )
 from PyQt5.QtCore import Qt, QSize, QDate
 from qtawesome import icon
 import sys
 import sqlite3
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+import os
+import datetime
+from odeme_al import OdemeAlForm
 
 class PaymentHistoryForm(QWidget):
     def __init__(self):
@@ -55,6 +66,11 @@ class PaymentHistoryForm(QWidget):
         btn_detay = self.stil_buton("DETAY GÖRÜNTÜLE", "fa5s.info-circle", "#455a64")
         btn_pdf = self.stil_buton("PDF AKTAR", "fa5s.file-pdf", "#43a047")
         btn_kapat = self.stil_buton("SAYFAYI KAPAT", "fa5s.times", "#b71c1c")
+
+        # Buton bağlantıları
+        btn_detay.clicked.connect(self.detay_goruntule)
+        btn_pdf.clicked.connect(self.pdf_aktar)
+        btn_kapat.clicked.connect(self.close)
 
         ust_butonlar.addWidget(btn_kaydi_duzenle)
         ust_butonlar.addWidget(btn_kaydi_sil)
@@ -248,7 +264,7 @@ class PaymentHistoryForm(QWidget):
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT plaka, cari_kodu, cari_ad_unvan, tarih, odeme_tipi, tutar
+            SELECT plaka, cari_kodu, cari_ad_unvan, datetime(tarih, 'localtime') as tarih, odeme_tipi, tutar
             FROM KASA
             ORDER BY datetime(tarih) DESC
         """)
@@ -258,12 +274,169 @@ class PaymentHistoryForm(QWidget):
         self.table.setRowCount(len(rows))
         for row_idx, row in enumerate(rows):
             for col_idx, value in enumerate(row):
-                if col_idx == 5:  # tutar
+                if col_idx == 3:  # tarih sütunu
+                    # Tarihi Türkçe formata çevir
+                    try:
+                        tarih = datetime.datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                        item = QTableWidgetItem(tarih.strftime("%d.%m.%Y %H:%M:%S"))
+                    except:
+                        item = QTableWidgetItem(str(value))
+                elif col_idx == 5:  # tutar
                     item = QTableWidgetItem(f"{value:,.2f} TL")
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 else:
                     item = QTableWidgetItem(str(value))
                 self.table.setItem(row_idx, col_idx, item)
+
+    def detay_goruntule(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir ödeme kaydı seçin!")
+            return
+
+        try:
+            # Seçili satırdan bilgileri al
+            plaka = self.table.item(selected_row, 0).text()
+            cari_kodu = self.table.item(selected_row, 1).text()
+            cari_ad_unvan = self.table.item(selected_row, 2).text()
+            tarih = self.table.item(selected_row, 3).text()
+            odeme_tipi = self.table.item(selected_row, 4).text()
+            tutar = float(self.table.item(selected_row, 5).text().replace(" TL", "").replace(",", ""))
+
+            # Veritabanından servis_id ve kaynak_id bilgilerini al
+            conn = sqlite3.connect("oto_servis.db")
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT servis_id, kaynak_id, odeme_kaynagi
+                FROM KASA
+                WHERE plaka = ? AND cari_kodu = ? AND tarih = ? AND tutar = ?
+            """, (plaka, cari_kodu, tarih, tutar))
+            row = cursor.fetchone()
+            conn.close()
+
+            if not row:
+                QMessageBox.warning(self, "Uyarı", "Ödeme detayları bulunamadı!")
+                return
+
+            servis_id, kaynak_id, odeme_kaynagi = row
+
+            # OdemeAlForm'u aç
+            odeme_form = OdemeAlForm(
+                servis_id=servis_id,
+                cari_kodu=cari_kodu,
+                cari_ad_unvan=cari_ad_unvan,
+                telefon="",  # Telefon bilgisi yok
+                toplam_tutar=tutar,
+                parent=self,
+                plaka=plaka,
+                odeme_kaynagi=odeme_kaynagi,
+                kaynak_id=kaynak_id
+            )
+
+            # Form alanlarını devre dışı bırak
+            for widget in odeme_form.findChildren(QLineEdit):
+                widget.setReadOnly(True)
+            for widget in odeme_form.findChildren(QComboBox):
+                widget.setEnabled(False)
+            for widget in odeme_form.findChildren(QDateEdit):
+                widget.setEnabled(False)
+            for widget in odeme_form.findChildren(QPushButton):
+                widget.setEnabled(False)
+
+            odeme_form.exec_()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Detay görüntülenirken bir hata oluştu:\n{str(e)}")
+
+    def pdf_aktar(self):
+        try:
+            # Türkçe karakter desteği için font kaydı
+            font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+            pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+
+            # PDF dosya adı: {tarih}_odeme_gecmisi.pdf
+            tarih = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            default_name = f"{tarih}_odeme_gecmisi.pdf"
+            path, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_name, "PDF Files (*.pdf)")
+            if not path:
+                return
+
+            # PDF oluştur
+            doc = SimpleDocTemplate(path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            styles.add(ParagraphStyle(name='Turkish', fontName='DejaVu', fontSize=12, leading=16))
+            styles.add(ParagraphStyle(name='TurkishTitle', fontName='DejaVu', fontSize=16, leading=20, alignment=1))
+            styles.add(ParagraphStyle(name='TurkishHeader', fontName='DejaVu', fontSize=14, leading=18, alignment=1))
+
+            elements = []
+
+            # Başlık
+            elements.append(Paragraph("ÖDEME GEÇMİŞİ", styles['TurkishTitle']))
+            elements.append(Spacer(1, 12))
+
+            # Tarih bilgisi - Saat, dakika ve saniye eklendi
+            elements.append(Paragraph(f"Oluşturulma Tarihi: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}", styles['Turkish']))
+            elements.append(Spacer(1, 12))
+
+            # Tablo başlıkları
+            headers = ["Plaka", "Cari Kodu", "Cari Ünvanı", "Tarih", "Ödeme Tipi", "Alınan Tutar"]
+            data = [headers]
+
+            # Tablo verileri
+            toplam_tutar = 0
+            for row in range(self.table.rowCount()):
+                row_data = []
+                for col in range(self.table.columnCount()):
+                    item = self.table.item(row, col)
+                    if item is not None:
+                        if col == 3:  # Tarih sütunu - sadece tarih göster
+                            try:
+                                tarih = datetime.datetime.strptime(item.text(), "%d.%m.%Y %H:%M:%S")
+                                row_data.append(tarih.strftime("%d.%m.%Y"))
+                            except:
+                                row_data.append(item.text())
+                        elif col == 5:  # Alınan Tutar sütunu
+                            try:
+                                tutar = float(item.text().replace(" TL", "").replace(",", ""))
+                                toplam_tutar += tutar
+                                row_data.append(f"{tutar:,.2f} TL")
+                            except:
+                                row_data.append(item.text())
+                        else:
+                            row_data.append(item.text())
+                    else:
+                        row_data.append("")
+                data.append(row_data)
+
+            # Tablo oluştur
+            t = Table(data, repeatRows=1, colWidths=[70, 70, 120, 80, 70, 70])
+            t.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'DejaVu'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('FONTSIZE', (0, 1), (-1, -1), 10),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+                ('GRID', (0, 0), (-1, -1), 0.7, colors.grey),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(t)
+
+            # Alt bilgiler
+            elements.append(Spacer(1, 12))
+            elements.append(Paragraph(f"Toplam Kayıt: {self.table.rowCount()}", styles['Turkish']))
+            elements.append(Paragraph(f"Toplam Alınan: {toplam_tutar:,.2f} TL", styles['Turkish']))
+
+            # PDF'i oluştur
+            doc.build(elements)
+            QMessageBox.information(self, "Başarılı", "Ödeme geçmişi başarıyla PDF olarak kaydedildi.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

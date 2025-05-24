@@ -109,19 +109,22 @@ def load_cari_list_for_select():
 def load_cari_list_for_table():
     """
     Cari listesini tabloya uygun şekilde döndürür.
-    (cari_kodu, cari_ad_unvan, cep_telefonu, cari_tipi, toplam_tutar)
+    (cari_kodu, cari_ad_unvan, cep_telefonu, cari_tipi, toplam_tutar, aciklama)
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT
-            cari_kodu,
-            cari_ad_unvan,
-            cep_telefonu,
-            cari_tipi,
-            0 as toplam_tutar,
-            aciklama
-        FROM cariler
+        SELECT 
+            c.cari_kodu,
+            c.cari_ad_unvan,
+            c.cep_telefonu,
+            c.cari_tipi,
+            COALESCE(SUM(s.servis_tutar), 0) as toplam_tutar,
+            c.aciklama
+        FROM cariler c
+        LEFT JOIN servisler s ON c.cari_kodu = s.cari_kodu AND s.servis_durumu = 'Açık'
+        GROUP BY c.cari_kodu, c.cari_ad_unvan, c.cep_telefonu, c.cari_tipi, c.aciklama
+        ORDER BY c.cari_kodu
     """)
     result = cursor.fetchall()
     conn.close()
@@ -724,6 +727,171 @@ def get_kasa_transactions(start_date=None, end_date=None, odeme_tipi=None, islem
     query += " ORDER BY k.tarih DESC"
     
     cursor.execute(query, params)
+    result = cursor.fetchall()
+    conn.close()
+    return result
+
+def load_service_details(servis_id):
+    """Servis detaylarını veritabanından çeker"""
+    conn = sqlite3.connect("oto_servis.db")
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT 
+                s.id,
+                s.plaka,
+                s.servis_tarihi,
+                s.servis_durumu,
+                s.servis_kapanis_tarihi,
+                s.aciklama,
+                c.cari_kodu,
+                c.cari_ad_unvan,
+                c.cep_telefonu,
+                c.vergi_no,
+                a.arac_tipi,
+                a.marka,
+                a.model,
+                a.model_yili,
+                a.sasi_no,
+                a.motor_no
+            FROM servisler s
+            LEFT JOIN cariler c ON s.cari_kodu = c.cari_kodu
+            LEFT JOIN araclar a ON s.plaka = a.plaka
+            WHERE s.id = ?
+        """, (servis_id,))
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'id': row[0],
+                'plaka': row[1],
+                'servis_tarihi': row[2],
+                'servis_durumu': row[3],
+                'servis_kapanis_tarihi': row[4],
+                'aciklama': row[5],
+                'cari_kodu': row[6],
+                'cari_ad_unvan': row[7],
+                'cep_telefonu': row[8],
+                'vergi_no': row[9],
+                'arac_tipi': row[10],
+                'marka': row[11],
+                'model': row[12],
+                'model_yili': row[13],
+                'sasi_no': row[14],
+                'motor_no': row[15]
+            }
+        return {}
+    except Exception as e:
+        print(f"Error loading service details: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def load_cari_details(cari_kodu):
+    """Cari detaylarını veritabanından çeker"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT 
+                cari_kodu,
+                cari_ad_unvan,
+                cep_telefonu,
+                cari_tipi,
+                vergi_no,
+                aciklama
+            FROM cariler
+            WHERE cari_kodu = ?
+        """, (cari_kodu,))
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'cari_kodu': row[0],
+                'cari_ad_unvan': row[1],
+                'cep_telefonu': row[2],
+                'cari_tipi': row[3],
+                'vergi_no': row[4],
+                'aciklama': row[5]
+            }
+        return {}
+    except Exception as e:
+        print(f"Error loading cari details: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def load_car_details(plaka):
+    """Araç detaylarını veritabanından çeker"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT 
+                plaka,
+                marka,
+                model,
+                model_yili,
+                arac_tipi,
+                motor_no,
+                sasi_no,
+                yakit_cinsi
+            FROM araclar
+            WHERE plaka = ?
+        """, (plaka,))
+        
+        row = cursor.fetchone()
+        if row:
+            return {
+                'plaka': row[0],
+                'marka': row[1],
+                'model': row[2],
+                'model_yili': row[3],
+                'arac_tipi': row[4],
+                'motor_no': row[5],
+                'sasi_no': row[6],
+                'yakit_cinsi': row[7]
+            }
+        return {}
+    except Exception as e:
+        print(f"Error loading car details: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def load_cari_arac_servis_bilgileri(cari_kodu):
+    """
+    Cariye ait araçların servis bilgilerini getirir.
+    Dönüş: [(plaka, arac_tipi, model_yili, marka, model, servis_sayisi, toplam_servis_tutari), ...]
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 
+            a.plaka,
+            a.arac_tipi,
+            a.model_yili,
+            a.marka,
+            a.model,
+            COUNT(s.id) as servis_sayisi,
+            COALESCE(
+                SUM(
+                    CASE 
+                        WHEN s.servis_durumu = 'Kapalı' THEN s.servis_kapanis_tutar
+                        WHEN s.servis_durumu = 'Açık' THEN s.servis_tutar
+                        ELSE 0
+                    END
+                ), 0
+            ) as toplam_servis_tutari
+        FROM araclar a
+        LEFT JOIN servisler s ON a.plaka = s.plaka
+        WHERE a.cari_kodu = ?
+        GROUP BY a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model
+        ORDER BY a.plaka
+    """, (cari_kodu,))
     result = cursor.fetchall()
     conn.close()
     return result

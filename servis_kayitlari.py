@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox
 )
 from qtawesome import icon
+from pdf_oluşturucu import mevcut_pdf_duzenle
 
 class ServisKayitlariForm(QDialog):
     def __init__(self, cari_ad, plaka, arac_tipi, model_yili, marka, model, parent=None):
@@ -89,11 +90,11 @@ class ServisKayitlariForm(QDialog):
             return
 
         servis_tarihi = self.table.item(selected_row, 0).text()
-        from database_progress import load_service_details, load_service_operations, load_cari_details, load_car_details
+        from database_progress import get_service_full_details
         import sqlite3
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM SERVİSLER WHERE plaka=? AND servis_tarihi=?", (self.plaka, servis_tarihi))
+        cursor.execute("SELECT id FROM servisler WHERE plaka=? AND servis_tarihi=?", (self.plaka, servis_tarihi))
         row = cursor.fetchone()
         conn.close()
         if not row:
@@ -101,115 +102,80 @@ class ServisKayitlariForm(QDialog):
             return
         servis_id = row[0]
 
-        servis_bilgi = load_service_details(servis_id)
-        islem_listesi = load_service_operations(servis_id)
-        cari_bilgi = load_cari_details(servis_bilgi.get("cari_kodu", "")) if servis_bilgi else {}
-        arac_bilgi = load_car_details(self.plaka)
+        # Tüm servis detaylarını tek seferde al
+        detaylar = get_service_full_details(servis_id)
+        if not detaylar:
+            QMessageBox.warning(self, "Uyarı", "Servis detayları alınamadı!")
+            return
 
-        dosya_yolu, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", f"servis_{servis_id}.pdf", "PDF Files (*.pdf)")
+        # Detayları ayrıştır
+        servis_bilgi = detaylar["servis"]
+        cari_bilgi = detaylar["cari"]
+        arac_bilgi = detaylar["arac"]
+        islem_listesi = detaylar["islemler"]
+
+        # Vergi numarası kontrolü ekleyelim
+        vergi_no = cari_bilgi.get('vergi_no', '')
+        if vergi_no is None:
+            vergi_no = ''
+
+        # İş emri numarasını 6 haneli formatta hazırla
+        is_emri_no = f"{servis_id:06d}"  # 6 haneli, başında sıfır olacak şekilde formatla
+
+        dosya_yolu, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", f"servis_{is_emri_no}.pdf", "PDF Files (*.pdf)")
         if not dosya_yolu:
             return
 
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.units import mm
-        from reportlab.lib import colors
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
-        import os
+        # İşlemleri PDF için hazırla
+        islem_texts = []
+        y_baslangic = 92.5  # İlk işlem satırının Y koordinatı
+        satir_yuksekligi = 3.5
 
-        # Türkçe karakter desteği için DejaVuSans fontunu ekle
-        font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-        if not os.path.exists(font_path):
-            from reportlab.rl_config import TTFSearchPath
-            for p in TTFSearchPath:
-                test_path = os.path.join(p, "DejaVuSans.ttf")
-                if os.path.exists(test_path):
-                    font_path = test_path
-                    break
-        pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+        # Toplam tutarları hesapla
+        kdv_haric_toplam = sum(islem['islem_tutari'] for islem in islem_listesi)
+        kdv_tutari = sum(islem['kdv_tutari'] for islem in islem_listesi)
+        toplam_tutar = kdv_haric_toplam + kdv_tutari
 
-        c = canvas.Canvas(dosya_yolu, pagesize=A4)
-        width, height = A4
-        y = height - 25 * mm
+        # İşlemleri PDF için hazırla
+        for i, islem in enumerate(islem_listesi, 1):
+            islem_texts.extend([
+                (6, y_baslangic - (i * satir_yuksekligi), str(i)),
+                (18, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_aciklama']} {islem['aciklama']}"),
+                (67.5, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
+                (81.5, y_baslangic - (i * satir_yuksekligi), "1"),
+                (88.5, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
+                (102, y_baslangic - (i * satir_yuksekligi), "0.0%"),
+                (110, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}")
+            ])
 
-        # Başlık
-        c.setFont("DejaVu", 18)
-        c.drawCentredString(width / 2, y, "SERVİS DETAY RAPORU")
-        y -= 15 * mm
+        # PDF için eklemeler sözlüğünü oluştur
+        eklemeler = {
+            'text': [
+                # Servis ve Cari Bilgileri
+                (95, 155.5, is_emri_no),
+                (54, 155.5, self.plaka),
+                (26, 148.5, cari_bilgi.get('cari_ad_unvan', '')),
+                (30, 141.2, cari_bilgi.get('cep_telefonu', '')),
+                (30, 140, vergi_no),
+                (30, 133.5, arac_bilgi.get('arac_tipi', '')),
+                (30, 130.5, f"{arac_bilgi.get('marka', '')} {arac_bilgi.get('model', '')}"),
+                (30, 126.5, str(arac_bilgi.get('model_yili', ''))),
+                (72, 133.5, arac_bilgi.get('sasi_no', '')),
+                (72, 130.5, arac_bilgi.get('motor_no', '')),
+                (72, 127, servis_bilgi.get('servis_tarihi', '')),
+                (35, 122, servis_bilgi.get('servis_tarihi', '')),
+                (35, 114.5, servis_bilgi.get('servis_tarihi', '')),
 
-        # --- Bilgi Kutusu ---
-        c.setFont("DejaVu", 10)
-        kutu_yukseklik = 18 * mm
-        c.setFillColor(colors.lightgrey)
-        c.rect(15*mm, y - kutu_yukseklik + 5*mm, width-30*mm, kutu_yukseklik, fill=1, stroke=0)
-        c.setFillColor(colors.black)
-        y_kutu = y + kutu_yukseklik - 10*mm
+                # Tutar Bilgileri
+                (105, 41, f"₺ {kdv_haric_toplam:,.2f} TL"),
+                (105, 38, f"₺ {kdv_tutari:,.2f} TL"),
+                (105, 35, f"₺ {toplam_tutar:,.2f} TL")
+            ]
+        }
 
-        # Cari ve Araç Bilgileri Tek Satırda
-        c.drawString(20*mm, y_kutu, f"Cari Kodu: {servis_bilgi.get('cari_kodu','')}")
-        c.drawString(55*mm, y_kutu, f"Cari Adı: {cari_bilgi.get('cari_ad_unvan','')}")
-        c.drawString(110*mm, y_kutu, f"Plaka: {servis_bilgi.get('plaka','')}")
-        c.drawString(140*mm, y_kutu, f"Model: {arac_bilgi.get('model','')}")
-        c.drawString(170*mm, y_kutu, f"Model Yılı: {arac_bilgi.get('model_yili','')}")
-        c.drawString(200*mm, y_kutu, f"Marka: {arac_bilgi.get('marka','')}")
+        # İşlemleri eklemeler listesine ekle
+        eklemeler['text'].extend(islem_texts)
 
-        y = y - kutu_yukseklik - 5*mm
-
-        # --- Servis Bilgileri ---
-        c.setFont("DejaVu", 11)
-        yazdir_bilgi(20*mm, y, "Servis ID", servis_id)
-        c.setFont("DejaVu", 10)
-        # Servis tarihi veya kapanış tarihi
-        if servis_bilgi.get('servis_durumu', '') == 'Kapalı':
-            tarih_label = "Kapanış Tarihi"
-            tarih_value = servis_bilgi.get('servis_kapanis_tarihi', servis_bilgi.get('servis_tarihi', ''))
-        else:
-            tarih_label = "Servis Tarihi"
-            tarih_value = servis_bilgi.get('servis_tarihi', '')
-        yazdir_bilgi(60*mm, y, tarih_label, tarih_value)
-        y -= 8
-        aciklama = servis_bilgi.get('aciklama','')
-        max_len = 90
-        if len(aciklama) > max_len:
-            c.drawString(20*mm, y, f"Açıklama: {aciklama[:max_len]}")
-            y -= 6
-            c.drawString(20*mm, y, f"           {aciklama[max_len:]}")
-        else:
-            c.drawString(20*mm, y, f"Açıklama: {aciklama}")
-        y -= 12
-
-        # --- İşlem Tablosu Başlığı ---
-        c.setFont("DejaVu", 11)
-        c.setFillColor(colors.gray)
-        c.rect(20*mm, y-2*mm, 170*mm, 8*mm, fill=1)
-        c.setFillColor(colors.white)
-        c.drawString(22*mm, y, "Açıklama")
-        c.drawString(80*mm, y, "Tutar")
-        c.drawString(110*mm, y, "KDV")
-        c.drawString(130*mm, y, "Ek Açıklama")
-        c.setFillColor(colors.black)
-        y -= 10 * mm
-
-        # --- İşlemler Tablosu ---
-        c.setFont("DejaVu", 9)
-        toplam_tutar = 0
-        for islem in islem_listesi:
-            if y < 30 * mm:
-                c.showPage()
-                y = height - 30 * mm
-            _, aciklama, tutar, kdv, ek_aciklama = islem
-            c.drawString(22*mm, y, str(aciklama)[:40])
-            c.drawString(80*mm, y, f"{tutar:,.2f}")
-            c.drawString(110*mm, y, f"%{kdv}")
-            c.drawString(130*mm, y, str(ek_aciklama)[:30])
-            toplam_tutar += tutar
-            y -= 7 * mm
-
-        # --- Toplam Tutar ---
-        y -= 5 * mm
-        c.setFont("DejaVu", 11)
-        c.drawString(22*mm, y, f"Toplam Tutar: {toplam_tutar:,.2f} TL")
-
-        c.save()
+        # PDF'i oluştur
+        mevcut_pdf_duzenle("classiccar.pdf", dosya_yolu, eklemeler, font_size=6)
         QMessageBox.information(self, "Başarılı", "PDF başarıyla oluşturuldu.")

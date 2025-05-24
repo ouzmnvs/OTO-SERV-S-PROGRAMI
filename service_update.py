@@ -379,9 +379,9 @@ class ServiceUpdateForm(QDialog):
             for i, islem in enumerate(islemler, 1):
                 islem_texts.extend([
                     (6, y_start - (i * line_height), str(i)),
-                    (18, y_start - (i * line_height), islem["islem_aciklama"]),
-                    (67.5, y_start - (i * line_height), "1"),
-                    (81.5, y_start - (i * line_height), ""),
+                    (18, y_start - (i * line_height), f"{islem["islem_aciklama"]} {islem["aciklama"]}"),
+                    (67.5, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),
+                    (81.5, y_start - (i * line_height), "1"),
                     (88.5, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),
                     (102, y_start - (i * line_height), "0.0%"),
                     (110, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")

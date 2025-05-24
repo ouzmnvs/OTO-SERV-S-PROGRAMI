@@ -9,7 +9,7 @@ from database_progress import load_cari_list_for_table  # Cari bilgilerini yükl
 # from odeme_al import OdemeAlForm
 from add_cari import AddCariForm  # En üste ekleyin
 from edit_cari import EditCariForm
-# from cari_arac_kayitlari import AracListesiForm
+from cari_servis_hareketleri import CariServisHareketleriForm
 import sqlite3
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -55,7 +55,7 @@ class CariListForm(QWidget):
         buton_layout.addWidget(btn_sil)
 
         btn_servis_hareket = self.stil_buton("SERVİS HAREKETLERİ", 'fa5s.exchange-alt', '#455a64')
-        # btn_servis_hareket.clicked.connect(self.servis_hareketleri_ac)
+        btn_servis_hareket.clicked.connect(self.servis_hareketleri_ac)
         buton_layout.addWidget(btn_servis_hareket)
 
         # buton_layout.addWidget(self.stil_buton("ÖDEME AL", 'fa5s.money-bill-wave', '#fbc02d'))
@@ -277,8 +277,17 @@ class CariListForm(QWidget):
     def pdf_aktar(self):
         try:
             # Türkçe karakter desteği için font kaydı
-            font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
-            pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+            # font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+            # pdfmetrics.registerFont(TTFont("DejaVu", font_path))
+            font_path = os.path.join(os.path.dirname(__file__), "arial-unicode-ms.ttf")
+            try:
+                pdfmetrics.registerFont(TTFont("ArialUnicode", font_path))
+                font_name = "ArialUnicode"
+            except Exception as e:
+                print(f"Hata: Arial Unicode MS fontu yüklenemedi: {e}. Varsayılan font kullanılacak.")
+                font_name = "Helvetica" # Varsayılan font
+                QMessageBox.warning(self, "Uyarı", f"Arial Unicode MS fontu yüklenemedi ({e}). PDF'de Türkçe karakter sorunları yaşanabilir.")
+
 
             # PDF dosya adı: {tarih}_cari_listesi.pdf
             tarih = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -290,9 +299,13 @@ class CariListForm(QWidget):
             # PDF oluştur
             doc = SimpleDocTemplate(path, pagesize=A4)
             styles = getSampleStyleSheet()
-            styles.add(ParagraphStyle(name='Turkish', fontName='DejaVu', fontSize=12, leading=16))
-            styles.add(ParagraphStyle(name='TurkishTitle', fontName='DejaVu', fontSize=16, leading=20, alignment=1))
-            styles.add(ParagraphStyle(name='TurkishHeader', fontName='DejaVu', fontSize=14, leading=18, alignment=1))
+            # styles.add(ParagraphStyle(name='Turkish', fontName='DejaVu', fontSize=12, leading=16))
+            # styles.add(ParagraphStyle(name='TurkishTitle', fontName='DejaVu', fontSize=16, leading=20, alignment=1))
+            # styles.add(ParagraphStyle(name='TurkishHeader', fontName='DejaVu', fontSize=14, leading=18, alignment=1))
+            styles.add(ParagraphStyle(name='Turkish', fontName=font_name, fontSize=12, leading=16))
+            styles.add(ParagraphStyle(name='TurkishTitle', fontName=font_name, fontSize=16, leading=20, alignment=1))
+            styles.add(ParagraphStyle(name='TurkishHeader', fontName=font_name, fontSize=14, leading=18, alignment=1))
+
 
             elements = []
 
@@ -317,10 +330,13 @@ class CariListForm(QWidget):
                     if item is not None:
                         if col == 5:  # Toplam Tutar sütunu
                             try:
-                                tutar = float(item.text())
+                                tutar = float(item.text().replace(' TL', '').replace(',', '.')) # Para birimi ve virgül kontrolü
                                 toplam_tutar += tutar
-                                row_data.append(f"{tutar:,.2f} TL")
-                            except:
+                                row_data.append(f"{tutar:,.2f} TL".replace('.', ',')) # Formatı Türkçe yap
+                            except ValueError: # Dönüştürme hatası olursa
+                                row_data.append(item.text()) # Orjinal metni kullan
+                            except Exception as e:
+                                print(f"Hata oluştu: {e}")
                                 row_data.append(item.text())
                         else:
                             row_data.append(item.text())
@@ -331,11 +347,13 @@ class CariListForm(QWidget):
             # Tablo oluştur
             t = Table(data, repeatRows=1, colWidths=[70, 120, 80, 70, 150, 70])
             t.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
+                # ('FONTNAME', (0, 0), (-1, -1), 'DejaVu'),
+                # ('FONTNAME', (0, 0), (-1, 0), 'DejaVu'),
+                ('FONTNAME', (0, 0), (-1, -1), font_name),
+                ('FONTNAME', (0, 0), (-1, 0), font_name),
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'DejaVu'),
                 ('FONTSIZE', (0, 0), (-1, 0), 12),
                 ('FONTSIZE', (0, 1), (-1, -1), 10),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
@@ -349,7 +367,8 @@ class CariListForm(QWidget):
             # Alt bilgiler
             elements.append(Spacer(1, 12))
             elements.append(Paragraph(f"Toplam Kayıt: {self.table.rowCount()}", styles['Turkish']))
-            elements.append(Paragraph(f"Toplam Tutar: {toplam_tutar:,.2f} TL", styles['Turkish']))
+            elements.append(Paragraph(f"Toplam Tutar: {toplam_tutar:,.2f} TL".replace('.', ','), styles['Turkish'])) # Formatı Türkçe yap
+
 
             # PDF'i oluştur
             doc.build(elements)
@@ -358,14 +377,18 @@ class CariListForm(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
-#     def servis_hareketleri_ac(self):
-#         selected_row = self.table.currentRow()
-#         if selected_row == -1:
-#             QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
-#             return
-#         cari_kodu = self.table.item(selected_row, 0).text()
-#         arac_form = AracListesiForm(cari_kodu, self)
-#         arac_form.exec_()
+    def servis_hareketleri_ac(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "Uyarı", "Lütfen bir cari seçin!")
+            return
+
+        cari_kodu = self.table.item(selected_row, 0).text()
+        cari_ad = self.table.item(selected_row, 1).text()
+
+        # Yeni form oluştur
+        form = CariServisHareketleriForm(cari_kodu, cari_ad, self)
+        form.exec_()
 
     def filtrele(self):
         """Cari listesini filtrele"""

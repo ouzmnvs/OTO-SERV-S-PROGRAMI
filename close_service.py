@@ -350,6 +350,24 @@ class CloseServiceForm(QWidget):
             self.load_closed_services_to_table()
             QMessageBox.information(self, "Başarılı", "Servis kaydı silindi.")
 
+    def get_next_service_number(self):
+        """Veritabanından son servis numarasını alır ve bir sonraki numarayı döndürür."""
+        import sqlite3
+        try:
+            conn = sqlite3.connect("oto_servis.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(CAST(id AS INTEGER)) FROM servisler")
+            last_number = cursor.fetchone()[0]
+            if last_number is None:
+                return "000001"
+            next_number = int(last_number) + 1
+            return f"{next_number:06d}"  # 6 haneli, başında sıfır olan format
+        except sqlite3.Error as e:
+            print(f"Veritabanı hatası: {e}")
+            return "000001"
+        finally:
+            conn.close()
+
     def pdf_aktar(self):
         selected_row = self.table.currentRow()
         if selected_row == -1:
@@ -371,6 +389,9 @@ class CloseServiceForm(QWidget):
             cari = detaylar["cari"]
             arac = detaylar["arac"]
             islemler = detaylar["islemler"]
+
+            # Yeni servis numarasını al
+            yeni_servis_no = self.get_next_service_number()
 
             # KDV hesaplamaları
             servis_tutar = servis["servis_tutar"]
@@ -398,7 +419,7 @@ class CloseServiceForm(QWidget):
             # PDF için eklemeler sözlüğünü oluştur
             eklemeler = {
                 'text': [
-                    (95, 155.5, str(servis["id"])),
+                    (95, 155.5, yeni_servis_no),  # Servis numarasını yeni numara ile değiştir
                     (54, 155.5, f"{servis['plaka']}"),
                     (26, 148.5, f"{cari['cari_ad_unvan']}"),
                     (30, 141.2, f"{cari['cep_telefonu']}"),
@@ -421,7 +442,7 @@ class CloseServiceForm(QWidget):
             eklemeler['text'].extend(islem_texts)
 
             # Dosya kaydetme dialogunu göster
-            default_filename = f"servis_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
+            default_filename = f"servis_{yeni_servis_no}_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "PDF Dosyasını Kaydet",
@@ -432,6 +453,19 @@ class CloseServiceForm(QWidget):
             if file_path:  # Eğer kullanıcı bir dosya yolu seçtiyse
                 # PDF'i oluştur
                 mevcut_pdf_duzenle("classiccar.pdf", file_path, eklemeler, font_size=6)
+                
+                # Veritabanında servis numarasını güncelle
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect("oto_servis.db")
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE servisler SET id = ? WHERE id = ?", (yeni_servis_no, servis_id))
+                    conn.commit()
+                except sqlite3.Error as e:
+                    print(f"Servis numarası güncellenirken hata: {e}")
+                finally:
+                    conn.close()
+                
                 QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
             else:
                 QMessageBox.information(self, "Bilgi", "PDF oluşturma işlemi iptal edildi.")
