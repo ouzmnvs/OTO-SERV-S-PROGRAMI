@@ -348,7 +348,7 @@ class OpenServiceForm(QWidget):
                         (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat = işlem tutarı / miktar
                         (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar bilgisini ekle
                         (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
-                        (170, y_start - (i * line_height), f"{islem['kdv_orani']:.1f}%"),  # KDV oranını yüzde olarak göster
+                        (170, y_start - (i * line_height), f"0.0%"),  # KDV oranını yüzde olarak göster
                         (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
                     ])
 

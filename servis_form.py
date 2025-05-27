@@ -670,7 +670,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
                 (113, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
                 (136, y_baslangic - (i * satir_yuksekligi), "1"),
                 (148, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
-                (170, y_baslangic - (i * satir_yuksekligi), "0.0%"),
+                (170, y_baslangic - (i * satir_yuksekligi), "0.0%"),  # İskonto her zaman 0
                 (184, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}")
             ])
 

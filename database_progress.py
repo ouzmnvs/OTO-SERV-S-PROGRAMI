@@ -119,10 +119,19 @@ def load_cari_list_for_table():
             c.cari_ad_unvan,
             c.cep_telefonu,
             c.cari_tipi,
-            COALESCE(SUM(s.servis_tutar), 0) as toplam_tutar,
+            COALESCE(
+                SUM(
+                    CASE 
+                        WHEN s.servis_durumu = 'Kapalı' THEN s.servis_tutar
+                        WHEN s.servis_durumu = 'Açık' THEN s.servis_tutar
+                        ELSE 0
+                    END
+                ), 0
+            ) as toplam_tutar,
             c.aciklama
         FROM cariler c
-        LEFT JOIN servisler s ON c.cari_kodu = s.cari_kodu AND s.servis_durumu = 'Açık'
+        LEFT JOIN araclar a ON c.cari_kodu = a.cari_kodu
+        LEFT JOIN servisler s ON a.plaka = s.plaka
         GROUP BY c.cari_kodu, c.cari_ad_unvan, c.cep_telefonu, c.cari_tipi, c.aciklama
         ORDER BY c.cari_kodu
     """)
@@ -456,18 +465,37 @@ def update_servis_tutar(servis_id):
     conn.commit()
     conn.close()
 
-def load_servis_kayitlari_by_plaka(plaka):
+def load_servis_kayitlari_by_plaka(plaka, search_text=None):
     """
     Belirtilen plakaya ait TÜM servisleri döndürür: (servis_tarihi, servis_tutar, servis_durumu)
+    Args:
+        plaka: Araç plakası
+        search_text: Arama metni (opsiyonel). Boşluklarla ayrılmış kelimeler için arama yapar.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT servis_tarihi, servis_tutar, servis_durumu
+    
+    query = """
+        SELECT servis_tarihi, servis_tutar, servis_durumu, aciklama
         FROM servisler
         WHERE plaka = ?
-        ORDER BY servis_tarihi DESC
-    """, (plaka,))
+    """
+    params = [plaka]
+    
+    if search_text:
+        # Arama metnini boşluklara göre ayır
+        search_words = search_text.strip().split()
+        if search_words:
+            # Her kelime için LIKE koşulu ekle
+            conditions = []
+            for word in search_words:
+                conditions.append("aciklama LIKE ?")
+                params.append(f"%{word}%")
+            query += " AND (" + " OR ".join(conditions) + ")"
+    
+    query += " ORDER BY servis_tarihi DESC"
+    
+    cursor.execute(query, params)
     result = cursor.fetchall()
     conn.close()
     return result

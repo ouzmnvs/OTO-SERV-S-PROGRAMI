@@ -429,7 +429,7 @@ class CloseServiceForm(QWidget):
             # İşlemleri PDF için hazırla
             islem_texts = []
             y_baslangic = 155  # 92.5 * 1.67
-            satir_yuksekligi = 6  # 3.5 * 1.67
+            satir_yuksekligi = 6
 
             for i, islem in enumerate(islemler, 1):
                 islem_texts.extend([
@@ -438,7 +438,7 @@ class CloseServiceForm(QWidget):
                     (114.5, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat = işlem tutarı / miktar
                     (136, y_baslangic - (i * satir_yuksekligi), str(islem['miktar'])),  # Miktar bilgisini ekle
                     (148, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
-                    (170, y_baslangic - (i * satir_yuksekligi), f"{islem['kdv_orani']:.1f}%"),  # KDV oranını yüzde olarak göster
+                    (170, y_baslangic - (i * satir_yuksekligi), "0.0%"),  # İskonto her zaman 0
                     (184, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}")
                 ])
 
@@ -506,7 +506,7 @@ class CloseServiceForm(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
-    def split_cari_ad_unvan(self, text, max_words=7, max_chars=40):
+    def split_cari_ad_unvan(self, text, max_words=6, max_chars=40):
         words = text.split()
         lines = []
         line_words = []
