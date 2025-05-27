@@ -454,6 +454,10 @@ class AddNewOfferForm(QDialog):
             from PyQt5.QtWidgets import QMessageBox
             QMessageBox.information(self, "Başarılı", "Teklif başarıyla kaydedildi!")
             
+            # Ana pencereyi güncelle
+            if self.parent:
+                self.parent.load_teklif_data()  # Ana penceredeki tabloyu güncelle
+            
             # Pencereyi kapat
             self.close_window()
 

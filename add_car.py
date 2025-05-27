@@ -15,6 +15,18 @@ from PyQt5.QtGui import QImage, QPixmap
 import datetime
 import hashlib
 import uuid
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_connection():
+    """Veritabanı bağlantısı için context manager"""
+    conn = None
+    try:
+        conn = sqlite3.connect("oto_servis.db")
+        yield conn
+    finally:
+        if conn:
+            conn.close()
 
 class AddCarForm(QDialog):
     def __init__(self, cari_kodu=None, cari_unvani=None, parent=None, dashboard_ref=None, on_saved=None, edit_mode=False, car_data=None):
@@ -335,33 +347,57 @@ class AddCarForm(QDialog):
                 QMessageBox.warning(self, "Uyarı", "Lütfen zorunlu alanları doldurun!")
                 return
 
-            # Son kapatılan servis tarihini al
-            conn = sqlite3.connect("oto_servis.db")
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT servis_tarihi 
-                FROM servisler 
-                WHERE plaka = ? AND servis_durumu = 'Kapalı' 
-                ORDER BY servis_tarihi DESC 
-                LIMIT 1
-            """, (plaka,))
-            son_servis = cursor.fetchone()
-            son_bakim_tarihi = son_servis[0] if son_servis else None
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                # Son kapatılan servis tarihini al
+                cursor.execute("""
+                    SELECT servis_tarihi 
+                    FROM servisler 
+                    WHERE plaka = ? AND servis_durumu = 'Kapalı' 
+                    ORDER BY servis_tarihi DESC 
+                    LIMIT 1
+                """, (plaka,))
+                son_servis = cursor.fetchone()
+                son_bakim_tarihi = son_servis[0] if son_servis else None
 
-            # Veritabanına kaydet
-            cursor.execute("""
-                INSERT INTO araclar (
-                    plaka, cari_kodu, arac_tipi, model_yili, marka, model, 
-                    sasi_no, motor_no, motor_hacmi, motor_gucu_kw, yakit_cinsi,
-                    son_bakim_tarihi, aciklama, ruhsat_foto
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                plaka, cari_kodu, arac_tipi, model_yili, marka, model,
-                sasi_no, motor_no, motor_hacmi, motor_gucu, yakit_cinsi,
-                son_bakim_tarihi, aciklama, self.ruhsat_foto_path
-            ))
-            conn.commit()
-            conn.close()
+                if self.edit_mode:
+                    # Düzenleme modu - UPDATE işlemi
+                    cursor.execute("""
+                        UPDATE araclar SET
+                            cari_kodu = ?,
+                            arac_tipi = ?,
+                            model_yili = ?,
+                            marka = ?,
+                            model = ?,
+                            sasi_no = ?,
+                            motor_no = ?,
+                            motor_hacmi = ?,
+                            motor_gucu_kw = ?,
+                            yakit_cinsi = ?,
+                            son_bakim_tarihi = ?,
+                            aciklama = ?,
+                            ruhsat_foto = ?
+                        WHERE plaka = ?
+                    """, (
+                        cari_kodu, arac_tipi, model_yili, marka, model,
+                        sasi_no, motor_no, motor_hacmi, motor_gucu, yakit_cinsi,
+                        son_bakim_tarihi, aciklama, self.ruhsat_foto_path,
+                        plaka  # WHERE koşulu için plaka
+                    ))
+                else:
+                    # Yeni kayıt modu - INSERT işlemi
+                    cursor.execute("""
+                        INSERT INTO araclar (
+                            plaka, cari_kodu, arac_tipi, model_yili, marka, model, 
+                            sasi_no, motor_no, motor_hacmi, motor_gucu_kw, yakit_cinsi,
+                            son_bakim_tarihi, aciklama, ruhsat_foto
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        plaka, cari_kodu, arac_tipi, model_yili, marka, model,
+                        sasi_no, motor_no, motor_hacmi, motor_gucu, yakit_cinsi,
+                        son_bakim_tarihi, aciklama, self.ruhsat_foto_path
+                    ))
+                conn.commit()
 
             QMessageBox.information(self, "Başarılı", "Araç başarıyla kaydedildi!")
             self.accept()
@@ -404,13 +440,12 @@ class AddCarForm(QDialog):
         self.aciklama.setText(self.car_data.get("aciklama", ""))
         
         # Cari ünvanını da doldur
-        conn = sqlite3.connect("oto_servis.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT cari_ad_unvan FROM cariler WHERE cari_kodu = ?", (self.car_data.get("cari_kodu", ""),))
-        result = cursor.fetchone()
-        if result:
-            self.cari_unvani.setText(result[0])
-        conn.close()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT cari_ad_unvan FROM cariler WHERE cari_kodu = ?", (self.car_data.get("cari_kodu", ""),))
+            result = cursor.fetchone()
+            if result:
+                self.cari_unvani.setText(result[0])
 
         # Düzenleme modunda cari kodu alanını salt okunur yap
         if self.edit_mode:
