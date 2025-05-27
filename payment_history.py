@@ -208,6 +208,10 @@ class PaymentHistoryForm(QWidget):
         btn_filtrele = self.stil_buton("Filtrele", "fa5s.search", "#1976d2")
         btn_temizle = self.stil_buton("Temizle", "fa5s.sync", "#fb8c00")
         
+        # Filtreleme ve temizleme butonlarının bağlantılarını ekle
+        btn_filtrele.clicked.connect(self.filter_table)
+        btn_temizle.clicked.connect(self.clear_filter)
+        
         filtre_layout.addWidget(btn_filtrele)
         filtre_layout.addWidget(btn_temizle)
         ana_layout.addWidget(filtre_frame)
@@ -431,6 +435,85 @@ class PaymentHistoryForm(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF olusturulurken bir hata olustu:\n{str(e)}")
+
+    def filter_table(self):
+        """Tabloyu arama kriterine ve tarih aralığına göre filtreler"""
+        search_text = self.cari_filtre.text().strip().lower()
+        baslangic_tarihi = self.baslangic_tarihi.date().toPyDate()
+        bitis_tarihi = self.bitis_tarihi.date().toPyDate()
+        
+        # Tüm satırları gizle
+        for row in range(self.table.rowCount()):
+            self.table.setRowHidden(row, True)
+        
+        # Her satırı kontrol et
+        visible_rows = 0
+        toplam_tutar = 0
+        
+        for row in range(self.table.rowCount()):
+            # Cari Kodu (1), Cari Ünvanı (2) ve Tarih (3) sütunlarını kontrol et
+            cari_kodu = self.table.item(row, 1).text().lower()
+            cari_unvani = self.table.item(row, 2).text().lower()
+            tarih_str = self.table.item(row, 3).text()
+            
+            try:
+                # Tarihi datetime nesnesine çevir
+                tarih = datetime.datetime.strptime(tarih_str, "%d.%m.%Y %H:%M:%S").date()
+                
+                # Tarih aralığı kontrolü
+                tarih_uygun = baslangic_tarihi <= tarih <= bitis_tarihi
+                
+                # Arama metni kontrolü
+                arama_uygun = (not search_text or 
+                             search_text in cari_kodu or 
+                             search_text in cari_unvani)
+                
+                # Eğer hem tarih hem de arama kriterleri uygunsa satırı göster
+                if tarih_uygun and arama_uygun:
+                    self.table.setRowHidden(row, False)
+                    visible_rows += 1
+                    
+                    # Toplam tutarı hesapla
+                    tutar_str = self.table.item(row, 5).text().replace(" TL", "").replace(",", "")
+                    toplam_tutar += float(tutar_str)
+                    
+            except Exception as e:
+                print(f"Tarih dönüştürme hatası: {e}")
+                continue
+        
+        # Alt bilgiyi güncelle
+        gun_farki = (bitis_tarihi - baslangic_tarihi).days + 1
+        self.findChild(QLabel).setText(
+            f"{visible_rows} adet kayıt listeleniyor | "
+            f"Toplam Alınan: {toplam_tutar:,.2f} TL | "
+            f"{gun_farki} Günlük Kayıt"
+        )
+
+    def clear_filter(self):
+        """Filtrelemeyi temizler ve tüm satırları gösterir"""
+        # Arama alanını temizle
+        self.cari_filtre.clear()
+        
+        # Tarih aralığını varsayılan değerlere sıfırla
+        self.baslangic_tarihi.setDate(QDate.currentDate())
+        self.bitis_tarihi.setDate(self.baslangic_tarihi.date().addDays(7))
+        
+        # Tüm satırları göster
+        for row in range(self.table.rowCount()):
+            self.table.setRowHidden(row, False)
+        
+        # Toplam tutarı hesapla
+        toplam_tutar = 0
+        for row in range(self.table.rowCount()):
+            tutar_str = self.table.item(row, 5).text().replace(" TL", "").replace(",", "")
+            toplam_tutar += float(tutar_str)
+        
+        # Alt bilgiyi güncelle
+        self.findChild(QLabel).setText(
+            f"{self.table.rowCount()} adet kayıt listeleniyor | "
+            f"Toplam Alınan: {toplam_tutar:,.2f} TL | "
+            f"7 Günlük Kayıt"
+        )
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

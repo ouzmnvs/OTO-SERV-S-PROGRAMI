@@ -56,8 +56,6 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
 
         # Üst butonlar
         self.create_top_buttons()
-        # Buton bağlantısını ekle
-        self.setup_connections()
         
         # Arama alanı
         self.create_search_area()
@@ -68,9 +66,13 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
         # Alt bilgi
         self.create_footer()
 
+        # Buton bağlantılarını ekle
+        self.setup_connections()
+
         # Verileri yükle
         self.load_teklif_data()
         self.setWindowIcon(icon('fa5s.file')) # Add a file icon
+
     def resize_or_center(self):
         ekran = QDesktopWidget().screenGeometry()
         genislik = int(ekran.width() * 0.85)
@@ -201,6 +203,12 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
         self.btn_odeme_al.clicked.connect(self.odeme_al_ac)
         # PDF Aktar butonuna tıklama olayını bağla
         self.btn_view_details.clicked.connect(self.pdf_aktar_teklif)
+        # Sayfayı kapat butonuna tıklama olayını bağla
+        self.btn_close.clicked.connect(self.close)
+        # Filtrele butonuna tıklama olayını bağla
+        self.btn_filter.clicked.connect(self.filter_table)
+        # Temizle butonuna tıklama olayını bağla
+        self.btn_clear.clicked.connect(self.clear_filter)
 
     def open_add_new_offer(self):
         from add_new_offer import AddNewOfferForm
@@ -472,6 +480,44 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
         # Sum the total_tutar which is at index 7
         toplam_tutar = sum(try_float(teklif[7]) for teklif in teklifler)
         self.footer_label.setText(f"{len(teklifler)} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:,.2f} TL")
+
+    def filter_table(self):
+        """Tabloyu arama kriterine göre filtreler"""
+        search_text = self.search_input.text().strip().lower()
+        
+        # Tüm satırları gizle
+        for row in range(self.table.rowCount()):
+            self.table.setRowHidden(row, True)
+        
+        # Eğer arama metni boşsa tüm satırları göster
+        if not search_text:
+            for row in range(self.table.rowCount()):
+                self.table.setRowHidden(row, False)
+            return
+        
+        # Her satırı kontrol et
+        for row in range(self.table.rowCount()):
+            # Cari Kodu (1), Cari Ünvanı (2) ve Plaka (3) sütunlarını kontrol et
+            cari_kodu = self.table.item(row, 1).text().lower()
+            cari_unvani = self.table.item(row, 2).text().lower()
+            plaka = self.table.item(row, 3).text().lower()
+            
+            # Arama metni bu alanlardan herhangi birinde varsa satırı göster
+            if (search_text in cari_kodu or 
+                search_text in cari_unvani or 
+                search_text in plaka):
+                self.table.setRowHidden(row, False)
+        
+        # Görünen satır sayısını footer'da göster
+        visible_rows = sum(1 for row in range(self.table.rowCount()) if not self.table.isRowHidden(row))
+        self.footer_label.setText(f"{visible_rows} adet kayıt listeleniyor")
+
+    def clear_filter(self):
+        """Filtrelemeyi temizler ve tüm satırları gösterir"""
+        self.search_input.clear()
+        for row in range(self.table.rowCount()):
+            self.table.setRowHidden(row, False)
+        self.load_teklif_data()  # Verileri yeniden yükle
 
 
 if __name__ == "__main__":
