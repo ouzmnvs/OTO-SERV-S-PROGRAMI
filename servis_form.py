@@ -421,7 +421,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         kayitlar = load_servis_kayitlari_by_plaka(self.plaka.text())
         self.gecmis_table.setRowCount(len(kayitlar))
         toplam_tutar = 0
-        for row, (tarih, tutar, durum) in enumerate(kayitlar):
+        for row, (tarih, tutar, durum, aciklama) in enumerate(kayitlar):
             self.gecmis_table.setItem(row, 0, QTableWidgetItem(tarih))
             self.gecmis_table.setItem(row, 1, QTableWidgetItem(f"{tutar:,.2f}"))
             self.gecmis_table.setItem(row, 2, QTableWidgetItem(durum))

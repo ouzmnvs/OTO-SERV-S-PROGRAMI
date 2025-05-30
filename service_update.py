@@ -509,36 +509,24 @@ class ServiceUpdateForm(QDialog):
             islemler = detaylar["islemler"]
 
             # İş emri numarasını 6 haneli formatta hazırla
-            is_emri_no = f"{int(servis['id']):06d}"  # 6 haneli, başında sıfır olacak şekilde formatla
-
-            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)-sum(islem['kdv_tutari'] for islem in islemler)
-            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler) # Tüm işlemlerin KDV toplamı
-            genel_toplam = toplam_kdv_haric + kdv_tutari_genel # Genel toplam = KDV hariç toplam + KDV
+            is_emri_no = f"{int(servis['id']):06d}"
 
             # İşlemleri PDF için hazırla
             islem_texts = []
-            y_start = 155  # 92.5 * 1.67
-            line_height = 6  # 3.5 * 1.67
+            y_start = 152.5
+            line_height = 3.7
 
-            # İşlemleri benzersiz olarak işle
-            processed_operations = set()
+            # İşlemleri sırayla işle
             for i, islem in enumerate(islemler, 1):
-                # İşlem açıklaması ve miktarını birleştirerek benzersiz bir anahtar oluştur
-                operation_key = f"{islem['islem_aciklama']}_{islem['miktar']}"
-                
-                # Eğer bu işlem daha önce işlenmediyse ekle
-                if operation_key not in processed_operations:
-                    processed_operations.add(operation_key)
-                    islem_texts.extend([
-                        (10, y_start - (i * line_height), str(i)),
-                        (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
-                        (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat = işlem tutarı / miktar
-                        (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar bilgisini ekle
-                        (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
-                        (170, y_start - (i * line_height), "0.0%"),  # İskonto her zaman 0
-                        (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
-                    ])
+                islem_texts.extend([
+                    (10, y_start - (i * line_height), str(i)),
+                    (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
+                    (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat
+                    (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar
+                    (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
+                    (170, y_start - (i * line_height), f"0.0%"),  # KDV oranı
+                    (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
+                ])
 
             # Vergi numarası kontrolü
             vergi_no = cari.get('vergi_no', '')
@@ -548,7 +536,7 @@ class ServiceUpdateForm(QDialog):
             # PDF için eklemeler sözlüğünü oluştur
             eklemeler = {
                 'text': [
-                    (159, 259.6, is_emri_no),  # İş emri numarası 6 haneli formatta
+                    (159, 260, is_emri_no),
                     (90, 259.6, f"{servis['plaka']}"),
                 ]
             }
@@ -566,22 +554,22 @@ class ServiceUpdateForm(QDialog):
                 (50, 237, f"{cari.get('cep_telefonu', '')}", 9),
                 (50, 232, f"{vergi_no}", 9),
                 (50, 223, f"{arac.get('arac_tipi', '')}", 9),
-                (50, 217.2, f"{arac.get('marka', '')} {arac.get('model', '')}", 9),
+                (50, 218, f"{arac.get('marka', '')} {arac.get('model', '')}", 9),
                 (50, 211, f"{arac.get('model_yili', '')}", 9),
-                (120, 223, f"{arac.get('sasi_no', 'XXXXXXXX')}", 9),
-                (120, 218, f"{arac.get('motor_no', 'XXXXXX')}", 9),
-                (58, 204, f"{servis['servis_tarihi']}", 9),
-                (58, 192, f"{servis['servis_tarihi']}", 9),
+                (120, 223, f"{arac.get('sasi_no', '')}", 9),
+                (120, 218, f"{arac.get('motor_no', '')}", 9),
+                (58, 204.5, f"{servis['servis_tarihi']}", 9),
+                (58, 191.5, f"{servis['servis_tarihi']}", 9),
                 (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{toplam_kdv_haric:,.2f} TL", 9),
-                (175, 63, f"{kdv_tutari_genel:,.2f} TL", 9),
-                (175, 58, f"{genel_toplam:,.2f} TL", 9)
+                (175, 68, f"{sum(islem['islem_tutari'] for islem in islemler) - sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
+                (175, 63, f"{sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
+                (175, 58, f"{sum(islem['islem_tutari'] for islem in islemler):,.2f} TL", 9)
             ])
 
             # İşlemleri eklemeler listesine ekle (font 9)
             for item in islem_texts:
                 if len(item) == 3:
-                    eklemeler['text'].append((*item, 9))
+                    eklemeler['text'].append((*item, 7.5))
                 else:
                     eklemeler['text'].append(item)
 

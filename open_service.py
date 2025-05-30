@@ -330,27 +330,20 @@ class OpenServiceForm(QWidget):
 
             # İşlemleri PDF için hazırla
             islem_texts = []
-            y_start = 155
-            line_height = 6
+            y_start = 152.5
+            line_height = 3.7
 
-            # İşlemleri benzersiz olarak işle
-            processed_operations = set()  # İşlenmiş işlemleri takip etmek için set
+            # İşlemleri sırayla işle (benzersizlik kontrolünü kaldır)
             for i, islem in enumerate(islemler, 1):
-                # İşlem açıklaması ve miktarını birleştirerek benzersiz bir anahtar oluştur
-                operation_key = f"{islem['islem_aciklama']}_{islem['miktar']}"
-                
-                # Eğer bu işlem daha önce işlenmediyse ekle
-                if operation_key not in processed_operations:
-                    processed_operations.add(operation_key)
-                    islem_texts.extend([
-                        (10, y_start - (i * line_height), str(i)),
-                        (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
-                        (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat = işlem tutarı / miktar
-                        (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar bilgisini ekle
-                        (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
-                        (170, y_start - (i * line_height), f"0.0%"),  # KDV oranını yüzde olarak göster
-                        (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
-                    ])
+                islem_texts.extend([
+                    (10, y_start - (i * line_height), str(i)),
+                    (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
+                    (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat
+                    (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar
+                    (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
+                    (170, y_start - (i * line_height), f"0.0%"),  # KDV oranı
+                    (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
+                ])
 
             # Check tax number
             vergi_no = cari.get('vergi_no', '')
@@ -385,7 +378,7 @@ class OpenServiceForm(QWidget):
                 (58, 204.5, f"{servis['servis_tarihi']}", 9),
                 (58, 191.5, f"{servis['servis_tarihi']}", 9),
                 (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{sum(islem['islem_tutari'] for islem in islemler):,.2f} TL", 9),
+                (175, 68, f"{sum(islem['islem_tutari'] for islem in islemler) - sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
                 (175, 63, f"{sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
                 (175, 58, f"{sum(islem['islem_tutari'] for islem in islemler):,.2f} TL", 9)
             ])
@@ -393,7 +386,7 @@ class OpenServiceForm(QWidget):
             # Add operations to additions list (font 9)
             for item in islem_texts:
                 if len(item) == 3:
-                    eklemeler['text'].append((*item, 9))
+                    eklemeler['text'].append((*item, 7.5))
                 else:
                     eklemeler['text'].append(item)
 

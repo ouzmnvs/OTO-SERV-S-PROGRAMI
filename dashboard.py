@@ -31,7 +31,8 @@ ALLOWED_MACS = [
     "08:8f:c3:72:23:f3",  # Wi-Fi adaptörü
     "a8:1e:84:ff:d8:4d",
     "64:6e:69:fb:8b:f7",
-    "64:6e:69:fb:8b:f8"  # Bluetooth adaptörü
+    "64:6e:69:fb:8b:f8",  # Bluetooth adaptörü
+    "08:8f:c3:68:25:ae"
 ]
 
 def get_resource_path(relative_path):

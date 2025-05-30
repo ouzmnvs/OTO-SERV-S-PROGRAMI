@@ -52,21 +52,21 @@ def resource_path(relative_path):
 
 # Font kayıt işlemi
 try:
-    # Arial Unicode MS Bold fontunu kullan
-    font_path = resource_path('arial-unicode-ms-bold.ttf')
-    if os.path.exists(font_path) and os.path.getsize(font_path) > 0:
-        pdfmetrics.registerFont(TTFont('ArialUnicode-Bold', font_path))
-        FONT_NAME = 'ArialUnicode-Bold'
+    # Her iki fontu da kaydet
+    font_path_normal = resource_path('arial-unicode-ms.ttf')
+    font_path_bold = resource_path('arial-unicode-ms-bold.ttf')
+    
+    if os.path.exists(font_path_normal) and os.path.exists(font_path_bold):
+        pdfmetrics.registerFont(TTFont('ArialUnicode', font_path_normal))
+        pdfmetrics.registerFont(TTFont('ArialUnicode-Bold', font_path_bold))
+        FONT_NAME = 'ArialUnicode'
         FONT_NAME_BOLD = 'ArialUnicode-Bold'
     else:
-        # Arial Unicode MS Bold bulunamazsa varsayılan fontları kullan
-        print("Warning: arial-unicode-ms-bold.ttf not found, using default fonts")
-        # Varsayılan fontları kullan
+        print("Warning: Font dosyaları bulunamadı, varsayılan fontlar kullanılacak")
         FONT_NAME = 'Times-Roman'
         FONT_NAME_BOLD = 'Times-Bold'
 except Exception as e:
-    print(f"Warning: Error loading fonts: {e}")
-    # Hata durumunda varsayılan fontları kullan
+    print(f"Warning: Font yükleme hatası: {e}")
     FONT_NAME = 'Times-Roman'
     FONT_NAME_BOLD = 'Times-Bold'
 
@@ -160,11 +160,14 @@ def teklif_pdf_olustur(dosya_adi="teklif_formu.pdf"):
 def mevcut_pdf_duzenle(kaynak_pdf, hedef_pdf, eklemeler, font_size=8):
     doc = fitz.open(resource_path(kaynak_pdf))
     
-    # Arial Unicode MS Bold font dosyasının yolu
-    font_path = resource_path('arial-unicode-ms-bold.ttf')
-    if not os.path.exists(font_path):
-        print("Arial Unicode MS Bold font dosyası bulunamadı, default font kullanılacak.")
-        font_path = None
+    # Her iki font dosyasının yolunu al
+    font_path_normal = resource_path('arial-unicode-ms.ttf')
+    font_path_bold = resource_path('arial-unicode-ms-bold.ttf')
+    
+    if not os.path.exists(font_path_normal) or not os.path.exists(font_path_bold):
+        print("Font dosyaları bulunamadı, varsayılan fontlar kullanılacak")
+        font_path_normal = None
+        font_path_bold = None
 
     for page in doc:
         if 'text' in eklemeler:
@@ -174,12 +177,17 @@ def mevcut_pdf_duzenle(kaynak_pdf, hedef_pdf, eklemeler, font_size=8):
                     x_point = x * 2.83465
                     y_point = page.rect.height - (y * 2.83465)
 
+                    # İşlem satırları için normal font, diğerleri için bold font kullan
+                    is_islem = False
+                    if 155 <= y <= 155 - (len(eklemeler['text']) * 3):  # İşlem satırları aralığı
+                        is_islem = True
+
                     page.insert_text(
                         (x_point, y_point),
                         text,
                         fontsize=font_size,
-                        fontname="ArialUnicode-Bold" if font_path else "helv-b",
-                        fontfile=font_path,
+                        fontname="ArialUnicode" if is_islem else "ArialUnicode-Bold",
+                        fontfile=font_path_normal if is_islem else font_path_bold,
                         color=(0, 0, 0)
                     )
                 else:
@@ -187,12 +195,17 @@ def mevcut_pdf_duzenle(kaynak_pdf, hedef_pdf, eklemeler, font_size=8):
                     x_point = x * 2.83465
                     y_point = page.rect.height - (y * 2.83465)
 
+                    # İşlem satırları için normal font, diğerleri için bold font kullan
+                    is_islem = False
+                    if 155 <= y <= 155 - (len(eklemeler['text']) * 3):  # İşlem satırları aralığı
+                        is_islem = True
+
                     page.insert_text(
                         (x_point, y_point),
                         text,
                         fontsize=font_size,
-                        fontname="ArialUnicode-Bold" if font_path else "helv-b",
-                        fontfile=font_path,
+                        fontname="ArialUnicode" if is_islem else "ArialUnicode-Bold",
+                        fontfile=font_path_normal if is_islem else font_path_bold,
                         color=(0, 0, 0)
                     )
         if 'image' in eklemeler:

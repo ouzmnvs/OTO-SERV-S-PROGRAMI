@@ -421,25 +421,21 @@ class CloseServiceForm(QWidget):
             # İş emri numarasını 6 haneli formatta hazırla
             is_emri_no = f"{int(servis['id']):06d}"
 
-            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)-sum(islem['kdv_tutari'] for islem in islemler)
-            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)
-            genel_toplam = toplam_kdv_haric + kdv_tutari_genel
-
             # İşlemleri PDF için hazırla
             islem_texts = []
-            y_baslangic = 155  # 92.5 * 1.67
-            satir_yuksekligi = 6
+            y_start = 152.5
+            line_height = 3.7
 
+            # İşlemleri sırayla işle
             for i, islem in enumerate(islemler, 1):
                 islem_texts.extend([
-                    (10, y_baslangic - (i * satir_yuksekligi), str(i)),
-                    (30, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_aciklama']} {islem['aciklama']}"),
-                    (114.5, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat = işlem tutarı / miktar
-                    (136, y_baslangic - (i * satir_yuksekligi), str(islem['miktar'])),  # Miktar bilgisini ekle
-                    (148, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
-                    (170, y_baslangic - (i * satir_yuksekligi), "0.0%"),  # İskonto her zaman 0
-                    (184, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}")
+                    (10, y_start - (i * line_height), str(i)),
+                    (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
+                    (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat
+                    (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar
+                    (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
+                    (170, y_start - (i * line_height), f"0.0%"),  # KDV oranı
+                    (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
                 ])
 
             # Vergi numarası kontrolü
@@ -450,7 +446,7 @@ class CloseServiceForm(QWidget):
             # PDF için eklemeler sözlüğünü oluştur
             eklemeler = {
                 'text': [
-                    (159, 259.6, is_emri_no),  # İş emri numarası 6 haneli formatta
+                    (159, 260, is_emri_no),
                     (90, 259.6, f"{servis['plaka']}"),
                 ]
             }
@@ -468,22 +464,22 @@ class CloseServiceForm(QWidget):
                 (50, 237, f"{cari.get('cep_telefonu', '')}", 9),
                 (50, 232, f"{vergi_no}", 9),
                 (50, 223, f"{arac.get('arac_tipi', '')}", 9),
-                (50, 217.2, f"{arac.get('marka', '')} {arac.get('model', '')}", 9),
+                (50, 218, f"{arac.get('marka', '')} {arac.get('model', '')}", 9),
                 (50, 211, f"{arac.get('model_yili', '')}", 9),
                 (120, 223, f"{arac.get('sasi_no', '')}", 9),
                 (120, 218, f"{arac.get('motor_no', '')}", 9),
-                (58, 204, f"{servis['servis_tarihi']}", 9),
-                (58, 192, f"{servis['servis_tarihi']}", 9),
+                (58, 204.5, f"{servis['servis_tarihi']}", 9),
+                (58, 191.5, f"{servis['servis_tarihi']}", 9),
                 (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{toplam_kdv_haric:,.2f} TL", 9),
-                (175, 63, f"{kdv_tutari_genel:,.2f} TL", 9),
-                (175, 58, f"{genel_toplam:,.2f} TL", 9)
+                (175, 68, f"{sum(islem['islem_tutari'] for islem in islemler) - sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
+                (175, 63, f"{sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
+                (175, 58, f"{sum(islem['islem_tutari'] for islem in islemler):,.2f} TL", 9)
             ])
 
-            # İşlemleri eklemeler listesine ekle (font 9)
+            # İşlemleri eklemeler listesine ekle (font 7.5)
             for item in islem_texts:
                 if len(item) == 3:
-                    eklemeler['text'].append((*item, 9))
+                    eklemeler['text'].append((*item, 7.5))
                 else:
                     eklemeler['text'].append(item)
 

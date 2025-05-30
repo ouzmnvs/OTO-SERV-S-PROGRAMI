@@ -161,24 +161,19 @@ class ServisKayitlariForm(QDialog):
 
         # İşlemleri PDF için hazırla
         islem_texts = []
-        y_baslangic = 155
-        satir_yuksekligi = 6
-
-        # Toplam tutarları hesapla
-        kdv_haric_toplam = sum(islem['islem_tutari'] for islem in islem_listesi)
-        kdv_tutari = sum(islem['kdv_tutari'] for islem in islem_listesi)
-        toplam_tutar = kdv_haric_toplam + kdv_tutari
+        y_baslangic = 152.5
+        satir_yuksekligi = 3.7
 
         # İşlemleri PDF için hazırla
         for i, islem in enumerate(islem_listesi, 1):
             islem_texts.extend([
-                (10, y_baslangic - (i * satir_yuksekligi), str(i), 9),
-                (30, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_aciklama']} {islem['aciklama']}", 9),
-                (113, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}", 9),
-                (136, y_baslangic - (i * satir_yuksekligi), "1", 9),
-                (148, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}", 9),
-                (170, y_baslangic - (i * satir_yuksekligi), "0.0%", 9),  # İskonto her zaman 0
-                (184, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}", 9)
+                (10, y_baslangic - (i * satir_yuksekligi), str(i), 7.5),
+                (30, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_aciklama']} {islem['aciklama']}", 7.5),
+                (114.5, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari'] / islem['miktar']:.2f}", 7.5),
+                (136, y_baslangic - (i * satir_yuksekligi), str(islem['miktar']), 7.5),
+                (148, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}", 7.5),
+                (170, y_baslangic - (i * satir_yuksekligi), "0.0%", 7.5),
+                (184, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}", 7.5)
             ])
 
         # Cari ad unvanını böl
@@ -189,29 +184,29 @@ class ServisKayitlariForm(QDialog):
         eklemeler = {
             'text': [
                 # Servis ve Cari Bilgileri
-                (159, 260, is_emri_no, 9),  # İş emri numarası
-                (90, 260, self.plaka, 9),  # Plaka
-                (50, 236, cari_bilgi.get('cep_telefonu', ''), 9),  # Telefon
-                (50, 232, vergi_no, 9),  # Vergi no
-                (50, 223, arac_bilgi.get('arac_tipi', ''), 9),  # Araç tipi
-                (50, 218, f"{arac_bilgi.get('marka', '')} {arac_bilgi.get('model', '')}", 9),  # Marka model
-                (50, 211, str(arac_bilgi.get('model_yili', '')), 9),  # Model yılı
-                (120, 223, arac_bilgi.get('sasi_no', ''), 9),  # Şasi no
-                (120, 218, arac_bilgi.get('motor_no', ''), 9),  # Motor no
-                (120, 211, servis_bilgi.get('servis_tarihi', ''), 9),  # Servis tarihi
-                (58, 204, servis_bilgi.get('servis_tarihi', ''), 9),  # Tarih
-                (58, 191, servis_bilgi.get('servis_tarihi', ''), 9),  # Tarih
+                (159, 260, is_emri_no, 9),
+                (90, 259.6, self.plaka, 9),
+                (50, 237, cari_bilgi.get('cep_telefonu', ''), 9),
+                (50, 232, vergi_no, 9),
+                (50, 223, arac_bilgi.get('arac_tipi', ''), 9),
+                (50, 218, f"{arac_bilgi.get('marka', '')} {arac_bilgi.get('model', '')}", 9),
+                (50, 211, str(arac_bilgi.get('model_yili', '')), 9),
+                (120, 223, arac_bilgi.get('sasi_no', ''), 9),
+                (120, 218, arac_bilgi.get('motor_no', ''), 9),
+                (58, 204.5, servis_bilgi.get('servis_tarihi', ''), 9),
+                (58, 191.5, servis_bilgi.get('servis_tarihi', ''), 9),
+                (25, 181, servis_bilgi.get('aciklama', ''), 9),
 
-                # Tutar Bilgileri
-                (175, 68, f"{kdv_haric_toplam:,.2f} TL", 9),
-                (175, 63, f"{kdv_tutari:,.2f} TL", 9),
-                (175, 58, f"{toplam_tutar:,.2f} TL", 9)
+                # Tutar Bilgileri - Updated calculations to match open_service.py
+                (175, 68, f"{sum(islem['islem_tutari'] for islem in islem_listesi) - sum(islem['kdv_tutari'] for islem in islem_listesi):,.2f} TL", 9),
+                (175, 63, f"{sum(islem['kdv_tutari'] for islem in islem_listesi):,.2f} TL", 9),
+                (175, 58, f"{sum(islem['islem_tutari'] for islem in islem_listesi):,.2f} TL", 9)
             ]
         }
 
         # Her satırı PDF'e ekle (cari adı için font boyutu 7.5)
         for i, line in enumerate(cari_ad_unvan_lines):
-            eklemeler['text'].append((43, 248 - (i * 5), line, 7.5))
+            eklemeler['text'].append((45, 250 - (i * 5), line, 7.5))
 
         # İşlemleri eklemeler listesine ekle
         eklemeler['text'].extend(islem_texts)
