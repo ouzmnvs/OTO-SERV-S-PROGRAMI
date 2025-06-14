@@ -354,7 +354,7 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
             islemler = detaylar["islemler"]
 
             # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            genel_toplam = float(teklif["toplam_tutar"])  # Genel toplam = servis tutarı
+            genel_toplam = sum(islem['islem_tutari'] for islem in islemler)  # Genel toplam = işlemlerin toplamı
             kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
             toplam_kdv_haric = genel_toplam - kdv_tutari_genel  # KDV hariç toplam = genel toplam - KDV tutarı
 
@@ -401,7 +401,7 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
                     (116, 49, f"{0:,.2f} TL"),  # İndirimli Tutar (Sabit 0)
                     (116, 46.3, f"{toplam_kdv_haric:,.2f} TL"),  # İndirimli Ara Toplam (KDV Hariç Toplam ile aynı)
                     (116, 43.9, f"{kdv_tutari_genel:,.2f} TL"),  # KDV Tutarı (İşlemlerin KDV tutarları toplamı)
-                    (116, 40.8, f"{genel_toplam:,.2f} TL")  # Genel Toplam
+                    (116, 40.8, f"{genel_toplam:,.2f} TL")  # Genel Toplam (İşlemlerin toplamı)
                 ]
             }
 

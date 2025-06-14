@@ -749,10 +749,9 @@ class TeklifForm(QDialog):
             islemler = teklif_details["islemler"]
 
             # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            genel_toplam = float(teklif["toplam_tutar"])  # Genel toplam = servis tutarı
+            genel_toplam = sum(islem['islem_tutari'] for islem in islemler)  # Genel toplam = işlemlerin toplamı
             kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
             toplam_kdv_haric = genel_toplam - kdv_tutari_genel  # KDV hariç toplam = genel toplam - KDV tutarı
-
             # İşlemleri PDF için hazırla
             islem_texts = []
             y_baslangic = 119.5  # İlk işlem satırının Y koordinatı
