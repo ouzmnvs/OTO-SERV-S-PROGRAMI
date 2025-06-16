@@ -16,7 +16,6 @@ def create_executable():
     if os.path.exists("OTO-SERVIS.spec"):
         os.remove("OTO-SERVIS.spec")
 
-    # PyInstaller parametreleri
     params = [
         'dashboard.py',  # Ana program dosyası
         '--name=OTO-SERVIS',  # Exe dosyasının adı
@@ -48,7 +47,6 @@ def create_executable():
         '--hidden-import=io',
         '--collect-all=reportlab',
         '--collect-all=PyMuPDF',
-        '--exclude-module=pydoc',
         '--clean',  # Önceki build dosyalarını temizle
         '--noconfirm',  # Onay istemeden üzerine yaz
     ]

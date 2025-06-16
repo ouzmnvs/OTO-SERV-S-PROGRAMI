@@ -179,22 +179,32 @@ class OpenServiceForm(QWidget):
 
     def load_open_services_to_table(self, services):
         """Açık servisleri tabloya yükler ve alt bilgiyi günceller."""
-        self.table.setRowCount(len(services))  # Satır sayısını ayarla
+        self.table.setRowCount(len(services))
         toplam_tutar = 0.0
 
         for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi) in enumerate(services):
+            # Servis detaylarını al
+            details = get_service_full_details(servis_id)
+            if details and details.get("islemler"):
+                # İşlem tutarı ve KDV tutarını hesapla
+                islem_tutari = sum(islem['islem_tutari'] for islem in details["islemler"])
+                kdv_tutari = sum(islem['kdv_tutari'] for islem in details["islemler"])
+                toplam_tutar_hesaplanan = islem_tutari + kdv_tutari
+            else:
+                toplam_tutar_hesaplanan = tutar  # Eğer detaylar alınamazsa mevcut tutarı kullan
+
             self.table.setItem(row, 0, QTableWidgetItem(str(servis_id)))
             self.table.setItem(row, 1, QTableWidgetItem(cari_kodu))
             self.table.setItem(row, 2, QTableWidgetItem(cari_unvan))
             self.table.setItem(row, 3, QTableWidgetItem(plaka))
             self.table.setItem(row, 4, QTableWidgetItem(tarih))
-            self.table.setItem(row, 5, QTableWidgetItem(f"{tutar:.2f}"))
+            self.table.setItem(row, 5, QTableWidgetItem(f"{toplam_tutar_hesaplanan:.2f}"))
             self.table.setItem(row, 6, QTableWidgetItem(arac_getiren_kisi or ""))
             self.table.setItem(row, 7, QTableWidgetItem(durum))
-            toplam_tutar += tutar
+            toplam_tutar += toplam_tutar_hesaplanan
 
-        # Update the alt_bilgi label
-        alt_bilgi_font_size = int(self.screen_height * 0.011)  # Reduced from 0.012
+        # Alt bilgiyi güncelle
+        alt_bilgi_font_size = int(self.screen_height * 0.011)
         self.alt_bilgi.setText(f"{len(services)} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:.2f} TL")
         self.alt_bilgi.setStyleSheet(f"""
             font-size: {alt_bilgi_font_size}px;
@@ -327,6 +337,11 @@ class OpenServiceForm(QWidget):
 
             # Format service number to 6 digits
             is_emri_no = f"{int(servis['id']):06d}"
+            
+            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
+            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)  # KDV hariç toplam = işlemlerin toplamı
+            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
+            genel_toplam = toplam_kdv_haric + kdv_tutari_genel  # Genel toplam = KDV hariç toplam + KDV tutarı
 
             # İşlemleri PDF için hazırla
             islem_texts = []
@@ -378,9 +393,9 @@ class OpenServiceForm(QWidget):
                 (58, 204.5, f"{servis['servis_tarihi']}", 9),
                 (58, 191.5, f"{servis['servis_tarihi']}", 9),
                 (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{sum(islem['islem_tutari'] for islem in islemler) - sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
-                (175, 63, f"{sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
-                (175, 58, f"{sum(islem['islem_tutari'] for islem in islemler):,.2f} TL", 9)
+                (175, 68, f"{toplam_kdv_haric} TL", 9),
+                (175, 63, f"{kdv_tutari_genel} TL", 9),
+                (175, 58, f"{genel_toplam} TL", 9)
             ])
 
             # Add operations to additions list (font 9)

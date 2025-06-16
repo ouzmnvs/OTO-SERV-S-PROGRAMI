@@ -508,6 +508,10 @@ class ServiceUpdateForm(QDialog):
             arac = detaylar["arac"]
             islemler = detaylar["islemler"]
 
+            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)  # KDV hariç toplam = işlemlerin toplamı
+            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
+            genel_toplam = toplam_kdv_haric + kdv_tutari_genel  # Genel toplam = KDV hariç toplam + KDV tutarı
+
             # İş emri numarasını 6 haneli formatta hazırla
             is_emri_no = f"{int(servis['id']):06d}"
 
@@ -561,9 +565,9 @@ class ServiceUpdateForm(QDialog):
                 (58, 204.5, f"{servis['servis_tarihi']}", 9),
                 (58, 191.5, f"{servis['servis_tarihi']}", 9),
                 (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{sum(islem['islem_tutari'] for islem in islemler) - sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
-                (175, 63, f"{sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
-                (175, 58, f"{sum(islem['islem_tutari'] for islem in islemler):,.2f} TL", 9)
+                (175, 68, f"{toplam_kdv_haric} TL", 9),
+                (175, 63, f"{kdv_tutari_genel} TL", 9),
+                (175, 58, f"{genel_toplam} TL", 9)
             ])
 
             # İşlemleri eklemeler listesine ekle (font 9)

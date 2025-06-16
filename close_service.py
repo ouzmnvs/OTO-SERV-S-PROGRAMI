@@ -425,6 +425,10 @@ class CloseServiceForm(QWidget):
             islem_texts = []
             y_start = 152.5
             line_height = 3.7
+            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
+            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)  # KDV hariç toplam = işlemlerin toplamı
+            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
+            genel_toplam = toplam_kdv_haric + kdv_tutari_genel  # Genel toplam = KDV hariç toplam + KDV tutarı
 
             # İşlemleri sırayla işle
             for i, islem in enumerate(islemler, 1):
@@ -471,9 +475,9 @@ class CloseServiceForm(QWidget):
                 (58, 204.5, f"{servis['servis_tarihi']}", 9),
                 (58, 191.5, f"{servis['servis_tarihi']}", 9),
                 (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{sum(islem['islem_tutari'] for islem in islemler) - sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
-                (175, 63, f"{sum(islem['kdv_tutari'] for islem in islemler):,.2f} TL", 9),
-                (175, 58, f"{sum(islem['islem_tutari'] for islem in islemler):,.2f} TL", 9)
+                (175, 68, f"{toplam_kdv_haric} TL", 9),
+                (175, 63, f"{kdv_tutari_genel} TL", 9),
+                (175, 58, f"{genel_toplam} TL", 9)
             ])
 
             # İşlemleri eklemeler listesine ekle (font 7.5)
@@ -482,6 +486,7 @@ class CloseServiceForm(QWidget):
                     eklemeler['text'].append((*item, 7.5))
                 else:
                     eklemeler['text'].append(item)
+
 
             # Dosya kaydetme dialogunu göster
             default_filename = f"servis_{is_emri_no}_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
@@ -544,6 +549,8 @@ def load_closed_services_with_kapanis_tutari():
     try:
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
+        
+        # Önce servisleri al
         cursor.execute("""
             SELECT 
                 s.id,
@@ -562,7 +569,31 @@ def load_closed_services_with_kapanis_tutari():
             WHERE s.servis_durumu = 'Kapalı'
             ORDER BY s.id DESC
         """)
-        return cursor.fetchall()
+        services = cursor.fetchall()
+        
+        # Her servis için işlem tutarlarını ve KDV'yi hesapla
+        updated_services = []
+        for service in services:
+            servis_id = service[0]
+            # İşlemleri al
+            cursor.execute("""
+                SELECT islem_tutari, kdv_tutari 
+                FROM islemler 
+                WHERE servis_id = ?
+            """, (servis_id,))
+            islemler = cursor.fetchall()
+            
+            # Toplam tutarı hesapla
+            islem_tutari = sum(islem[0] for islem in islemler)
+            kdv_tutari = sum(islem[1] for islem in islemler)
+            toplam_tutar = islem_tutari + kdv_tutari
+            
+            # Servis bilgilerini güncelle
+            updated_service = list(service)
+            updated_service[7] = toplam_tutar  # servis_tutar sütununu güncelle
+            updated_services.append(tuple(updated_service))
+        
+        return updated_services
     except sqlite3.Error as e:
         print(f"Veritabanı hatası: {e}")
         return []

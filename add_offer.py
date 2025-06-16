@@ -354,9 +354,11 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
             islemler = detaylar["islemler"]
 
             # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            genel_toplam = sum(islem['islem_tutari'] for islem in islemler)  # Genel toplam = işlemlerin toplamı
             kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
-            toplam_kdv_haric = genel_toplam - kdv_tutari_genel  # KDV hariç toplam = genel toplam - KDV tutarı
+            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler) 
+            genel_toplam = toplam_kdv_haric + kdv_tutari_genel # Genel toplam = işlemlerin toplamı
+           
+             # KDV hariç toplam = genel toplam - KDV tutarı
 
             # İşlemleri PDF için hazırla
             islem_texts = []
