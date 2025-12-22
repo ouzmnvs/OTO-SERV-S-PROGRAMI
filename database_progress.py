@@ -456,7 +456,7 @@ def update_servis_tutar(servis_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT SUM(islem_tutari) FROM islemler WHERE servis_id = ?
+        SELECT SUM(islem_tutari + kdv_tutari) FROM islemler WHERE servis_id = ?
     """, (servis_id,))
     toplam = cursor.fetchone()[0] or 0.0
     cursor.execute("""
@@ -467,7 +467,8 @@ def update_servis_tutar(servis_id):
 
 def load_servis_kayitlari_by_plaka(plaka, search_text=None):
     """
-    Belirtilen plakaya ait TÜM servisleri döndürür: (servis_tarihi, servis_tutar, servis_durumu)
+    Belirtilen plakaya ait TÜM servisleri döndürür:
+    (servis_id, servis_tarihi, toplam_servis_tutari_kdv_dahil, servis_durumu, aciklama)
     Args:
         plaka: Araç plakası
         search_text: Arama metni (opsiyonel). Boşluklarla ayrılmış kelimeler için arama yapar.
@@ -476,9 +477,15 @@ def load_servis_kayitlari_by_plaka(plaka, search_text=None):
     cursor = conn.cursor()
     
     query = """
-        SELECT servis_tarihi, servis_tutar, servis_durumu, aciklama
-        FROM servisler
-        WHERE plaka = ?
+        SELECT
+            s.id,
+            s.servis_tarihi,
+            COALESCE(SUM(i.islem_tutari), 0) + COALESCE(SUM(i.kdv_tutari), 0) as toplam_tutar_kdv_dahil,
+            s.servis_durumu,
+            s.aciklama
+        FROM servisler s
+        LEFT JOIN islemler i ON s.id = i.servis_id
+        WHERE s.plaka = ?
     """
     params = [plaka]
     
@@ -489,11 +496,11 @@ def load_servis_kayitlari_by_plaka(plaka, search_text=None):
             # Her kelime için LIKE koşulu ekle
             conditions = []
             for word in search_words:
-                conditions.append("aciklama LIKE ?")
+                conditions.append("s.aciklama LIKE ?")
                 params.append(f"%{word}%")
             query += " AND (" + " OR ".join(conditions) + ")"
     
-    query += " ORDER BY servis_tarihi DESC"
+    query += " GROUP BY s.id, s.servis_tarihi, s.servis_durumu, s.aciklama ORDER BY s.servis_tarihi DESC"
     
     cursor.execute(query, params)
     result = cursor.fetchall()
@@ -697,7 +704,7 @@ def update_teklif_tutar(teklif_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT SUM(islem_tutari) FROM teklif_islemler WHERE teklif_id = ?
+        SELECT SUM(islem_tutari + kdv_tutari) FROM teklif_islemler WHERE teklif_id = ?
     """, (teklif_id,))
     toplam = cursor.fetchone()[0] or 0.0
     cursor.execute("""

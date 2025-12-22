@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from qtawesome import icon
 import sys
-from database_progress import load_closed_services, get_service_full_details  # get_service_full_details'i ekleyin
+from database_progress import load_closed_services, get_service_full_details, get_db_connection  # get_service_full_details ve get_db_connection'ı ekleyin
 from odeme_al import OdemeAlForm
 from database_progress import delete_service
 from pdf_oluşturucu import mevcut_pdf_duzenle
@@ -350,12 +350,49 @@ class CloseServiceForm(QWidget):
             telefon = self.table.item(selected_row, 4).text()
             toplam_tutar = float(self.table.item(selected_row, 6).text().replace(",", "").replace(" TL", ""))
 
+            # İşlemleri al
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT islem_tutari, kdv_tutari 
+                FROM islemler 
+                WHERE servis_id = ?
+            """, (servis_id,))
+            islemler = cursor.fetchall()
+            
+            # Toplam tutarı hesapla
+            toplam_islem_tutari = sum(islem[0] for islem in islemler)
+            toplam_kdv = sum(islem[1] for islem in islemler)
+            hesaplanan_toplam = toplam_islem_tutari + toplam_kdv
+
+            # Yapılan ödemeleri kontrol et
+            cursor.execute("""
+                SELECT COALESCE(SUM(tutar), 0)
+                FROM KASA 
+                WHERE servis_id = ? AND odeme_kaynagi = 'SERVIS'
+            """, (servis_id,))
+            odenen_tutar = cursor.fetchone()[0]
+            conn.close()
+
+            # Kalan tutarı hesapla
+            kalan_tutar = hesaplanan_toplam - odenen_tutar
+
+            # Eğer kalan tutar 0 veya negatifse uyarı ver
+            if kalan_tutar <= 0:
+                QMessageBox.warning(self, "Uyarı", 
+                    f"Bu servis için ödenmesi gereken tutar kalmamış!\n"
+                    f"Toplam Tutar: {hesaplanan_toplam:.2f} TL\n"
+                    f"Ödenen Tutar: {odenen_tutar:.2f} TL\n"
+                    f"Kalan Tutar: {kalan_tutar:.2f} TL")
+                return
+
+            # Ödeme formunu aç
             odeme_form = OdemeAlForm(
                 servis_id=servis_id,
                 cari_kodu=cari_kodu,
                 cari_ad_unvan=cari_ad_unvan,
                 telefon=telefon,
-                toplam_tutar=toplam_tutar,
+                toplam_tutar=kalan_tutar,  # Kalan tutarı kullan
                 parent=self,
                 plaka=plaka,
                 odeme_kaynagi="SERVIS",
@@ -544,7 +581,7 @@ class OpenServiceForm(QWidget):
         self.setLayout(layout)
 
 def load_closed_services_with_kapanis_tutari():
-    """Kapalı servisleri servis_tutarı ile birlikte döndürür."""
+    """Kapalı servisleri, servis_tutar ve yapılmış ödemeleri düşerek kalan bakiye ile döndürür."""
     import sqlite3
     try:
         conn = sqlite3.connect("oto_servis.db")
@@ -560,7 +597,7 @@ def load_closed_services_with_kapanis_tutari():
                 c.cep_telefonu,
                 s.plaka,
                 s.servis_tarihi,
-                s.servis_tutar,
+                s.servis_tutar, -- Doğrudan servis_tutar'ı al
                 s.arac_getiren_kisi,
                 (SELECT COUNT(*) FROM islemler WHERE servis_id = s.id) as islem_sayisi
             FROM servisler s
@@ -571,26 +608,26 @@ def load_closed_services_with_kapanis_tutari():
         """)
         services = cursor.fetchall()
         
-        # Her servis için işlem tutarlarını ve KDV'yi hesapla
+        # Her servis için kalan tutarı hesapla
         updated_services = []
         for service in services:
             servis_id = service[0]
-            # İşlemleri al
-            cursor.execute("""
-                SELECT islem_tutari, kdv_tutari 
-                FROM islemler 
-                WHERE servis_id = ?
-            """, (servis_id,))
-            islemler = cursor.fetchall()
+            servis_tutar_db = service[7] # Veritabanından gelen servis_tutar
             
-            # Toplam tutarı hesapla
-            islem_tutari = sum(islem[0] for islem in islemler)
-            kdv_tutari = sum(islem[1] for islem in islemler)
-            toplam_tutar = islem_tutari + kdv_tutari
+            # Yapılan ödemeleri hesapla
+            cursor.execute("""
+                SELECT COALESCE(SUM(tutar), 0)
+                FROM KASA 
+                WHERE servis_id = ? AND odeme_kaynagi = 'SERVIS'
+            """, (servis_id,))
+            odenen_tutar = cursor.fetchone()[0]
+            
+            # Kalan tutarı hesapla
+            kalan_tutar = servis_tutar_db 
             
             # Servis bilgilerini güncelle
             updated_service = list(service)
-            updated_service[7] = toplam_tutar  # servis_tutar sütununu güncelle
+            updated_service[7] = kalan_tutar  # servis_tutar sütununu kalan tutar ile güncelle
             updated_services.append(tuple(updated_service))
         
         return updated_services

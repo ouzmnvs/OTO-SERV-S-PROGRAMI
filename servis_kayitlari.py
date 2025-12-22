@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import (
 )
 from qtawesome import icon
 from pdf_oluşturucu import mevcut_pdf_duzenle
+from PyQt5.QtCore import Qt
 
 class ServisKayitlariForm(QDialog):
     def __init__(self, cari_ad, plaka, arac_tipi, model_yili, marka, model, parent=None):
@@ -52,8 +53,8 @@ class ServisKayitlariForm(QDialog):
         ana_layout.addLayout(search_layout)
 
         # Servis Kayıtları Tablosu
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Tarih", "Tutar", "Durum"])
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Tarih", "Tutar", "Durum", "Açıklama"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -87,10 +88,13 @@ class ServisKayitlariForm(QDialog):
         kayitlar = load_servis_kayitlari_by_plaka(self.plaka, search_text)
         self.table.setRowCount(len(kayitlar))
         toplam_tutar = 0
-        for row, (tarih, tutar, durum, aciklama) in enumerate(kayitlar):
-            self.table.setItem(row, 0, QTableWidgetItem(tarih))
-            self.table.setItem(row, 1, QTableWidgetItem(f"{tutar:,.2f}"))
+        for row, (servis_id, tarih, tutar, durum, aciklama) in enumerate(kayitlar):
+            item_tarih = QTableWidgetItem(tarih)
+            item_tarih.setData(Qt.UserRole, servis_id)
+            self.table.setItem(row, 0, item_tarih)
+            self.table.setItem(row, 1, QTableWidgetItem(f"{tutar:,.2f} TL"))
             self.table.setItem(row, 2, QTableWidgetItem(durum))
+            self.table.setItem(row, 3, QTableWidgetItem(aciklama))
             toplam_tutar += tutar
         self.lbl_alt.setText(f"{len(kayitlar)} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:,.2f} TL")
 
@@ -122,16 +126,13 @@ class ServisKayitlariForm(QDialog):
 
         servis_tarihi = self.table.item(selected_row, 0).text()
         from database_progress import get_service_full_details
-        import sqlite3
-        conn = sqlite3.connect("oto_servis.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM servisler WHERE plaka=? AND servis_tarihi=?", (self.plaka, servis_tarihi))
-        row = cursor.fetchone()
-        conn.close()
-        if not row:
-            QMessageBox.warning(self, "Uyarı", "Servis kaydı bulunamadı!")
+        
+        # servis_id'yi doğrudan Qt.UserRole'dan al
+        item = self.table.item(selected_row, 0)
+        if not item or not item.data(Qt.UserRole):
+            QMessageBox.warning(self, "Uyarı", "Servis ID bulunamadı!")
             return
-        servis_id = row[0]
+        servis_id = item.data(Qt.UserRole)
 
         # Tüm servis detaylarını tek seferde al
         detaylar = get_service_full_details(servis_id)
@@ -163,6 +164,12 @@ class ServisKayitlariForm(QDialog):
         islem_texts = []
         y_baslangic = 152.5
         satir_yuksekligi = 3.7
+
+        # Toplam tutarları hesapla
+        toplam_islem_tutari = sum(islem['islem_tutari'] for islem in islem_listesi) # Yeni: İşlemlerin tutarları toplamı
+        kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islem_listesi) # İşlemlerin KDV tutarları toplamı
+        genel_toplam = toplam_islem_tutari + kdv_tutari_genel # Yeni: Genel toplam = KDV hariç + KDV tutarı
+        toplam_kdv_haric = toplam_islem_tutari # Yeni: KDV hariç = İşlemlerin tutarları toplamı
 
         # İşlemleri PDF için hazırla
         for i, islem in enumerate(islem_listesi, 1):
@@ -197,10 +204,10 @@ class ServisKayitlariForm(QDialog):
                 (58, 191.5, servis_bilgi.get('servis_tarihi', ''), 9),
                 (25, 181, servis_bilgi.get('aciklama', ''), 9),
 
-                # Tutar Bilgileri - Updated calculations to match open_service.py
-                (175, 68, f"{sum(islem['islem_tutari'] for islem in islem_listesi) - sum(islem['kdv_tutari'] for islem in islem_listesi):,.2f} TL", 9),
-                (175, 63, f"{sum(islem['kdv_tutari'] for islem in islem_listesi):,.2f} TL", 9),
-                (175, 58, f"{sum(islem['islem_tutari'] for islem in islem_listesi):,.2f} TL", 9)
+                # Tutar Bilgileri
+                (175, 68, f"{toplam_kdv_haric:,.2f} TL", 9),
+                (175, 63, f"{kdv_tutari_genel:,.2f} TL", 9),
+                (175, 58, f"{genel_toplam:,.2f} TL", 9)
             ]
         }
 

@@ -191,8 +191,8 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             }
         """)
         gecmis_layout = QVBoxLayout()
-        self.gecmis_table = QTableWidget(0, 3)
-        self.gecmis_table.setHorizontalHeaderLabels(["Tarih", "Tutar", "Durum"])
+        self.gecmis_table = QTableWidget(0, 4)
+        self.gecmis_table.setHorizontalHeaderLabels(["Tarih", "Tutar", "Durum", "Açıklama"])
         self.gecmis_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.gecmis_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.gecmis_table.setAlternatingRowColors(True)
@@ -210,7 +210,6 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
                 padding: 4px;
             }
         """)
-        # Çift tıklama olayını bağla
         self.gecmis_table.cellDoubleClicked.connect(self.handle_service_double_click)
         gecmis_layout.addWidget(self.gecmis_table)
         gecmis_group.setLayout(gecmis_layout)
@@ -418,14 +417,20 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
     def load_servis_kayitlari(self):
         """Araca ait servis kayıtlarını yükler."""
-        kayitlar = load_servis_kayitlari_by_plaka(self.plaka.text())
+        plaka = self.plaka.text()
+        if not plaka:
+            self.gecmis_table.setRowCount(0) # Plaka boşsa tabloyu temizle
+            return
+
+        kayitlar = load_servis_kayitlari_by_plaka(plaka)
         self.gecmis_table.setRowCount(len(kayitlar))
-        toplam_tutar = 0
-        for row, (tarih, tutar, durum, aciklama) in enumerate(kayitlar):
-            self.gecmis_table.setItem(row, 0, QTableWidgetItem(tarih))
-            self.gecmis_table.setItem(row, 1, QTableWidgetItem(f"{tutar:,.2f}"))
+        for row, (servis_id, tarih, tutar, durum, aciklama) in enumerate(kayitlar):
+            item_tarih = QTableWidgetItem(tarih)
+            item_tarih.setData(Qt.UserRole, servis_id) # servis_id'yi Qt.UserRole'a sakla
+            self.gecmis_table.setItem(row, 0, item_tarih)
+            self.gecmis_table.setItem(row, 1, QTableWidgetItem(f"{tutar:,.2f} TL"))
             self.gecmis_table.setItem(row, 2, QTableWidgetItem(durum))
-            toplam_tutar += tutar
+            self.gecmis_table.setItem(row, 3, QTableWidgetItem(aciklama))
 
     def _label(self, text, style):
         lbl = QLabel(text)
@@ -609,23 +614,17 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
     def handle_service_double_click(self, row, column):
         """Servis kaydına çift tıklandığında PDF oluşturur."""
         from PyQt5.QtWidgets import QFileDialog
-        servis_tarihi = self.gecmis_table.item(row, 0).text()
-        
-        # Servis ID'sini al
-        import sqlite3
-        conn = sqlite3.connect("oto_servis.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM servisler WHERE plaka=? AND servis_tarihi=?", 
-                      (self.plaka.text(), servis_tarihi))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if not row:
+
+        item = self.gecmis_table.item(row, 0) # Tarih öğesini al
+        if not item:
             QMessageBox.warning(self, "Uyarı", "Servis kaydı bulunamadı!")
             return
-            
-        servis_id = row[0]
         
+        servis_id = item.data(Qt.UserRole) # servis_id'yi Qt.UserRole'dan al
+        if not servis_id:
+            QMessageBox.warning(self, "Uyarı", "Servis ID bulunamadı!")
+            return
+
         # Servis detaylarını al
         detaylar = get_service_full_details(servis_id)
         if not detaylar:
@@ -647,7 +646,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         is_emri_no = f"{servis_id:06d}"
 
         # Dosya adını hazırla
-        default_filename = f"servis_{is_emri_no}_{self.plaka.text()}_{servis_tarihi}.pdf"
+        default_filename = f"servis_{is_emri_no}_{self.plaka.text()}_{item.text()}.pdf"
         dosya_yolu, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_filename, "PDF Files (*.pdf)")
         if not dosya_yolu:
             return
