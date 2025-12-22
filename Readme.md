@@ -1,0 +1,1 @@
+& "C:/Users/Metin/Desktop/Masaüstü/VS Projects Folder/oto-servis/OTO-SERV-S-PROGRAMI/env/Scripts/python.exe" build_improved.py

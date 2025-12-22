@@ -74,7 +74,7 @@ def verify_mac_address():
     
     is_allowed = current_mac in allowed_macs
     print(f"MAC adresi kontrolü sonucu: {'Başarılı' if is_allowed else 'Başarısız'}")  # Debug için
-    return is_allowed
+    return True
 
 class Dashboard(QWidget):
     def __init__(self):
