@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QLineEdit
 )
 from qtawesome import icon
-from pdf_oluşturucu import mevcut_pdf_duzenle
 from PyQt5.QtCore import Qt
 
 class ServisKayitlariForm(QDialog):
@@ -118,106 +117,17 @@ class ServisKayitlariForm(QDialog):
         return lines
 
     def detay_goruntule(self):
-        from PyQt5.QtWidgets import QMessageBox, QFileDialog
+        from PyQt5.QtWidgets import QMessageBox
         selected_row = self.table.currentRow()
         if selected_row == -1:
             QMessageBox.warning(self, "Uyarı", "Lütfen bir servis seçin!")
             return
 
-        servis_tarihi = self.table.item(selected_row, 0).text()
-        from database_progress import get_service_full_details
-        
         # servis_id'yi doğrudan Qt.UserRole'dan al
         item = self.table.item(selected_row, 0)
         if not item or not item.data(Qt.UserRole):
             QMessageBox.warning(self, "Uyarı", "Servis ID bulunamadı!")
             return
-        servis_id = item.data(Qt.UserRole)
 
-        # Tüm servis detaylarını tek seferde al
-        detaylar = get_service_full_details(servis_id)
-        if not detaylar:
-            QMessageBox.warning(self, "Uyarı", "Servis detayları alınamadı!")
-            return
-
-        # Detayları ayrıştır
-        servis_bilgi = detaylar["servis"]
-        cari_bilgi = detaylar["cari"]
-        arac_bilgi = detaylar["arac"]
-        islem_listesi = detaylar["islemler"]
-
-        # Vergi numarası kontrolü ekleyelim
-        vergi_no = cari_bilgi.get('vergi_no', '')
-        if vergi_no is None:
-            vergi_no = ''
-
-        # İş emri numarasını 6 haneli formatta hazırla
-        is_emri_no = f"{servis_id:06d}"  # 6 haneli, başında sıfır olacak şekilde formatla
-
-        # Dosya adını daha anlamlı hale getir
-        default_filename = f"servis_{is_emri_no}_{self.plaka}_{servis_tarihi}.pdf"
-        dosya_yolu, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_filename, "PDF Files (*.pdf)")
-        if not dosya_yolu:
-            return
-
-        # İşlemleri PDF için hazırla
-        islem_texts = []
-        y_baslangic = 152.5
-        satir_yuksekligi = 3.7
-
-        # Toplam tutarları hesapla
-        toplam_islem_tutari = sum(islem['islem_tutari'] for islem in islem_listesi) # Yeni: İşlemlerin tutarları toplamı
-        kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islem_listesi) # İşlemlerin KDV tutarları toplamı
-        genel_toplam = toplam_islem_tutari + kdv_tutari_genel # Yeni: Genel toplam = KDV hariç + KDV tutarı
-        toplam_kdv_haric = toplam_islem_tutari # Yeni: KDV hariç = İşlemlerin tutarları toplamı
-
-        # İşlemleri PDF için hazırla
-        for i, islem in enumerate(islem_listesi, 1):
-            islem_texts.extend([
-                (10, y_baslangic - (i * satir_yuksekligi), str(i), 7.5),
-                (30, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_aciklama']} {islem['aciklama']}", 7.5),
-                (114.5, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari'] / islem['miktar']:.2f}", 7.5),
-                (136, y_baslangic - (i * satir_yuksekligi), str(islem['miktar']), 7.5),
-                (148, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}", 7.5),
-                (170, y_baslangic - (i * satir_yuksekligi), "0.0%", 7.5),
-                (184, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}", 7.5)
-            ])
-
-        # Cari ad unvanını böl
-        cari_ad_unvan = cari_bilgi.get('cari_ad_unvan', '')
-        cari_ad_unvan_lines = self.split_cari_ad_unvan(cari_ad_unvan)
-
-        # PDF için eklemeler sözlüğünü oluştur
-        eklemeler = {
-            'text': [
-                # Servis ve Cari Bilgileri
-                (159, 260, is_emri_no, 9),
-                (90, 259.6, self.plaka, 9),
-                (50, 237, cari_bilgi.get('cep_telefonu', ''), 9),
-                (50, 232, vergi_no, 9),
-                (50, 223, arac_bilgi.get('arac_tipi', ''), 9),
-                (50, 218, f"{arac_bilgi.get('marka', '')} {arac_bilgi.get('model', '')}", 9),
-                (50, 211, str(arac_bilgi.get('model_yili', '')), 9),
-                (120, 223, arac_bilgi.get('sasi_no', ''), 9),
-                (120, 218, arac_bilgi.get('motor_no', ''), 9),
-                (58, 204.5, servis_bilgi.get('servis_tarihi', ''), 9),
-                (58, 191.5, servis_bilgi.get('servis_tarihi', ''), 9),
-                (25, 181, servis_bilgi.get('aciklama', ''), 9),
-
-                # Tutar Bilgileri
-                (175, 68, f"{toplam_kdv_haric:,.2f} TL", 9),
-                (175, 63, f"{kdv_tutari_genel:,.2f} TL", 9),
-                (175, 58, f"{genel_toplam:,.2f} TL", 9)
-            ]
-        }
-
-        # Her satırı PDF'e ekle (cari adı için font boyutu 7.5)
-        for i, line in enumerate(cari_ad_unvan_lines):
-            eklemeler['text'].append((45, 250 - (i * 5), line, 7.5))
-
-        # İşlemleri eklemeler listesine ekle
-        eklemeler['text'].extend(islem_texts)
-
-        # PDF'i oluştur
-        mevcut_pdf_duzenle("classiccar.pdf", dosya_yolu, eklemeler, font_size=9)
-        QMessageBox.information(self, "Başarılı", "PDF başarıyla oluşturuldu.")
+        from pdf_aktar import servis_pdf_aktar
+        servis_pdf_aktar(self, item.data(Qt.UserRole), varsayilan="is_emri")

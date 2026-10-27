@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont
 import sys
-from database_progress import get_kasa_transactions
+from database_progress import get_kasa_transactions, get_kasa_ozeti
 from datetime import datetime
 from qtawesome import icon  # qtawesome kütüphanesini ekleyin
 
@@ -79,8 +79,7 @@ class CaseTotalsForm(QWidget):
 
         lbl_bitis = QLabel("Bitiş")
         lbl_bitis.setFont(font_label)
-        tomorrow = QDate.currentDate().addDays(1)
-        self.date_bitis = QDateEdit(tomorrow)
+        self.date_bitis = QDateEdit(QDate.currentDate())
         self.date_bitis.setFont(font_combo)
         self.date_bitis.setCalendarPopup(True)
         self.date_bitis.setDisplayFormat("dd.MM.yyyy")
@@ -95,14 +94,14 @@ class CaseTotalsForm(QWidget):
 
         self.cmb_islem_tipi = QComboBox()
         self.cmb_islem_tipi.setFont(font_combo)
-        self.cmb_islem_tipi.addItems(["", "Servis İşlemi", "Normal İşlemi"])
+        self.cmb_islem_tipi.addItems(["", "Servis İşlemi", "Teklif İşlemi"])
         self.cmb_islem_tipi.setFixedWidth(input_width)
         self.cmb_islem_tipi.setFixedHeight(input_height)
 
         self.cmb_kisa_tarih = QComboBox()
         self.cmb_kisa_tarih.setFont(font_combo)
         self.cmb_kisa_tarih.addItems([
-             "" ,"Bugün", "Bu Hafta", "Bu Ay", "Bu Yıl"
+             "" ,"Bugün", "Bu Hafta", "Bu Ay", "Bu Yıl", "Tümü"
         ])
         self.cmb_kisa_tarih.setFixedWidth(input_width)
         self.cmb_kisa_tarih.setFixedHeight(input_height)
@@ -249,9 +248,16 @@ class CaseTotalsForm(QWidget):
 
         ana_layout.addWidget(self.table)
 
+        # Alt bilgi (her yüklemede yalnızca metni güncellenir)
+        self.alt_bilgi = QLabel("")
+        self.alt_bilgi.setFont(QFont("Arial", 12))
+        self.alt_bilgi.setStyleSheet("margin-top: 8px;")
+        ana_layout.addWidget(self.alt_bilgi)
+
         # Connect button signals
         btn_filtrele.clicked.connect(self.load_transactions)
         btn_temizle.clicked.connect(self.clear_filters)
+        self.cmb_kisa_tarih.currentIndexChanged.connect(self.kisa_tarih_sec)
 
         # Set styles for filter inputs
         filtre_widget.setStyleSheet("""
@@ -339,7 +345,7 @@ class CaseTotalsForm(QWidget):
             # İşlem tipini veritabanı formatına çevir
             if islem_tipi == "Servis İşlemi":
                 islem_tipi = "SERVIS"
-            elif islem_tipi == "Normal İşlemi":
+            elif islem_tipi == "Teklif İşlemi":
                 islem_tipi = "TEKLIF"
             else:
                 islem_tipi = None
@@ -365,8 +371,9 @@ class CaseTotalsForm(QWidget):
             for row_idx, transaction in enumerate(transactions):
                 self.table.insertRow(row_idx)
                 
-                # Tarih
-                tarih = datetime.strptime(transaction[0], "%Y-%m-%d %H:%M:%S").strftime("%d.%m.%Y %H:%M")
+                # Tarih ('2025-06-13 11:51:13' -> '13.06.2025 11:51'; farklı biçimde kaydedilmişse olduğu gibi)
+                t = str(transaction[0] or "")
+                tarih = f"{t[8:10]}.{t[5:7]}.{t[:4]} {t[11:16]}".strip() if len(t) >= 10 and t[4] == "-" and t[7] == "-" else t
                 self.table.setItem(row_idx, 0, QTableWidgetItem(tarih))
                 
                 # Ödeme Tipi
@@ -388,31 +395,60 @@ class CaseTotalsForm(QWidget):
             self.lbl_giris.setText(f"Toplam Tutar: {toplam_tutar:,.2f} TL")
             
             # Alt bilgiyi güncelle
-            alt_bilgi = QLabel(f'<span style="color:#222;">{len(transactions)} kayıt</span> | <b>Toplam {len(transactions)} kayıt listeleniyor</b>')
-            alt_bilgi.setFont(QFont("Arial", 12))
-            alt_bilgi.setStyleSheet("margin-top: 8px;")
-            
-            # Eğer önceki alt bilgi varsa kaldır
-            for i in reversed(range(self.layout().count())):
-                widget = self.layout().itemAt(i).widget()
-                if isinstance(widget, QLabel) and widget != self.lbl_giris:
-                    widget.deleteLater()
-            
-            self.layout().addWidget(alt_bilgi)
-            
+            self.alt_bilgi.setText(f'<span style="color:#222;">{len(transactions)} kayıt</span> | <b>Toplam {len(transactions)} kayıt listeleniyor</b>')
+            if not transactions:
+                # Kasa varsayılan olarak bugünü gösterir; eski tarihli ödemeler (ör. yeni yüklenen veritabanında) görünmez
+                adet, ilk, son = get_kasa_ozeti()
+                if adet:
+                    self.alt_bilgi.setText(
+                        f'<span style="color:#b71c1c;"><b>Seçilen tarih aralığında ödeme yok.</b> Kasada toplam {adet} ödeme kayıtlı '
+                        f'({self._tarih_tr(ilk)} - {self._tarih_tr(son)}). Tümünü görmek için Kısa Tarih\'ten <b>Tümü</b>\'nü seçin.</span>'
+                    )
+
         except Exception as e:
             print(f"Hata: {str(e)}")
             # Hata durumunda kullanıcıya bilgi ver
             from PyQt5.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Hata", f"Veriler yüklenirken bir hata oluştu:\n{str(e)}")
 
+    @staticmethod
+    def _tarih_tr(iso):
+        return f"{iso[8:10]}.{iso[5:7]}.{iso[:4]}" if iso and len(iso) >= 10 else (iso or "-")
+
+    def kisa_tarih_sec(self):
+        """Kısa tarih seçimine (Bugün / Bu Hafta / Bu Ay / Bu Yıl / Tümü) göre tarih aralığını ayarlar ve listeler."""
+        bugun = QDate.currentDate()
+        bitis = bugun
+        secim = self.cmb_kisa_tarih.currentText()
+        if secim == "Tümü":
+            _, ilk, son = get_kasa_ozeti()
+            baslangic = QDate.fromString(ilk, "yyyy-MM-dd") if ilk else bugun
+            son_tarih = QDate.fromString(son, "yyyy-MM-dd") if son else bugun
+            bitis = max(bugun, son_tarih) if son_tarih.isValid() else bugun
+            if not baslangic.isValid():
+                baslangic = bugun
+        else:
+            baslangic = {
+                "Bugün": bugun,
+                "Bu Hafta": bugun.addDays(1 - bugun.dayOfWeek()),  # Pazartesi
+                "Bu Ay": QDate(bugun.year(), bugun.month(), 1),
+                "Bu Yıl": QDate(bugun.year(), 1, 1),
+            }.get(secim)
+        if baslangic is None:
+            return
+        self.date_baslangic.setDate(baslangic)
+        self.date_bitis.setDate(bitis)
+        self.load_transactions()
+
     def clear_filters(self):
         """Filtreleri temizler ve verileri yeniden yükler."""
+        self.cmb_kisa_tarih.blockSignals(True)
+        self.cmb_kisa_tarih.setCurrentIndex(0)
+        self.cmb_kisa_tarih.blockSignals(False)
         self.date_baslangic.setDate(QDate.currentDate())
-        self.date_bitis.setDate(QDate.currentDate().addDays(1))  # Bitiş tarihini yarına ayarla
+        self.date_bitis.setDate(QDate.currentDate())
         self.cmb_islem_tipi.setCurrentIndex(0)
         self.cmb_odeme_tipi.setCurrentIndex(0)
-        self.cmb_kisa_tarih.setCurrentIndex(0)
         self.load_transactions()
 
 if __name__ == "__main__":

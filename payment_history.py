@@ -18,6 +18,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import os
 import datetime
 from odeme_al import OdemeAlForm
+from hizli_tablo import HizliTablo
 
 class PaymentHistoryForm(QWidget):
     def __init__(self):
@@ -214,19 +215,20 @@ class PaymentHistoryForm(QWidget):
         
         filtre_layout.addWidget(btn_filtrele)
         filtre_layout.addWidget(btn_temizle)
+        self.cari_filtre.returnPressed.connect(self.filter_table)
+        self.cari_filtre.textChanged.connect(self.filter_table)
         ana_layout.addWidget(filtre_frame)
 
-        # Tablo
-        self.table = QTableWidget()
+        # Tablo (binlerce ödemede de hızlı kalması için yalnızca görünen satırları çizer)
+        self.table = HizliTablo()
+        self.table.sag_hizala(5)
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
             "Plaka", "Cari Kodu", "Cari Ünvanı", "Tarih", "Ödeme Tipi", "Alınan Tutar"
         ])
-        
-        self.load_payments()
 
         self.table.setStyleSheet("""
-            QTableWidget {
+            QTableView {
                 gridline-color: #d0d0d0;
                 font-size: 12px;
             }
@@ -246,51 +248,74 @@ class PaymentHistoryForm(QWidget):
         ana_layout.addWidget(self.table)
 
         # Alt bilgi
-        alt_bilgi = QLabel("5 adet kayıt listeleniyor | Toplam Alınan: 18.711,00 TL | 7 Günlük Kayıt")
-        alt_bilgi.setStyleSheet("""
+        self.alt_bilgi = QLabel("")
+        self.alt_bilgi.setStyleSheet("""
             QLabel {
                 font-size: 12px;
                 color: #333;
                 padding: 8px 0;
             }
         """)
-        ana_layout.addWidget(alt_bilgi)
+        ana_layout.addWidget(self.alt_bilgi)
 
         self.setLayout(ana_layout)
 
         self.baslangic_tarihi.dateChanged.connect(self.bitis_tarihini_guncelle)
+        self.baslangic_tarihi.dateChanged.connect(self.filter_table)
+        self.bitis_tarihi.dateChanged.connect(self.filter_table)
+
+        self.tum_odemeler = []
+        self.load_payments()
+        self.tarih_araligini_sifirla()
 
     def bitis_tarihini_guncelle(self):
         yeni_bitis = self.baslangic_tarihi.date().addDays(7)
         self.bitis_tarihi.setDate(yeni_bitis)
 
     def load_payments(self):
+        """Ödemeleri okur ve mevcut filtreyi uygulayarak tabloya yazar."""
         conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
+        # tarih yerel saatle kaydedildiği için olduğu gibi gösterilir ('localtime' dönüşümü saati 3 saat kaydırıyordu)
         cursor.execute("""
-            SELECT plaka, cari_kodu, cari_ad_unvan, datetime(tarih, 'localtime') as tarih, odeme_tipi, tutar
-            FROM KASA
-            ORDER BY datetime(tarih) DESC
+            SELECT k.id, k.plaka, k.cari_kodu, k.cari_ad_unvan, k.tarih, k.odeme_tipi, k.tutar, c.cep_telefonu
+            FROM KASA k
+            LEFT JOIN cariler c ON k.cari_kodu = c.cari_kodu
+            ORDER BY k.tarih DESC
         """)
-        rows = cursor.fetchall()
+        self.tum_odemeler = cursor.fetchall()
         conn.close()
+        # (id, plaka, cari_kodu, cari_ad_unvan, tarih, odeme_tipi, tutar, telefon)
+        self.table.kayitlari_yukle(
+            self.tum_odemeler,
+            hucreler=lambda o: (o[1], o[2], o[3], self.tarih_metni(o[4]), o[5], f"{o[6] or 0:,.2f} TL"),
+            kimlik=lambda o: o[0],  # Detay görüntülemede kaydı bulmak için kasa id'si
+            arama_alanlari=lambda o: (o[1], o[2], o[3], o[7], o[5]),
+        )
+        self.filter_table()
 
-        self.table.setRowCount(len(rows))
-        for row_idx, row in enumerate(rows):
-            for col_idx, value in enumerate(row):
-                if col_idx == 3:  # tarih sütunu
-                    # Tarihi Türkçe formata çevir
-                    try:
-                        tarih = datetime.datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-                        item = QTableWidgetItem(tarih.strftime("%d.%m.%Y %H:%M:%S"))
-                    except:
-                        item = QTableWidgetItem(str(value))
-                elif col_idx == 5:  # tutar
-                    item = QTableWidgetItem(f"{value:,.2f} TL")
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                else:
-                    item = QTableWidgetItem(str(value))
-                self.table.setItem(row_idx, col_idx, item)
+    @staticmethod
+    def tarih_metni(tarih):
+        """'2025-06-17 18:40:04' -> '17.06.2025 18:40:04' (strptime'dan çok daha hızlı; binlerce satırda fark eder)."""
+        t = str(tarih or "")
+        if len(t) >= 19 and t[4] == "-" and t[7] == "-" and t[10] == " ":
+            return f"{t[8:10]}.{t[5:7]}.{t[:4]} {t[11:19]}"
+        return t
+
+    def tarih_araligini_sifirla(self):
+        """Tarih aralığını tüm ödemeleri kapsayacak şekilde ayarlar (yalnızca metinle arama da çalışsın)."""
+        # ISO tarihler metin olarak sıralanabilir; yalnızca en küçük ve en büyük tarih çözülür
+        gunler = [str(o[4])[:10] for o in self.tum_odemeler if o[4]]
+        tarihler = [QDate.fromString(g, "yyyy-MM-dd") for g in (min(gunler), max(gunler))] if gunler else []
+        tarihler = [t for t in tarihler if t.isValid()]
+        bugun = QDate.currentDate()
+        for tarih_alani in (self.baslangic_tarihi, self.bitis_tarihi):
+            tarih_alani.blockSignals(True)
+        self.baslangic_tarihi.setDate(min(tarihler + [bugun]))
+        self.bitis_tarihi.setDate(max(tarihler + [bugun]))
+        for tarih_alani in (self.baslangic_tarihi, self.bitis_tarihi):
+            tarih_alani.blockSignals(False)
+        self.filter_table()
 
     def detay_goruntule(self):
         selected_row = self.table.currentRow()
@@ -303,9 +328,8 @@ class PaymentHistoryForm(QWidget):
             plaka = self.table.item(selected_row, 0).text()
             cari_kodu = self.table.item(selected_row, 1).text()
             cari_ad_unvan = self.table.item(selected_row, 2).text()
-            tarih = self.table.item(selected_row, 3).text()
-            odeme_tipi = self.table.item(selected_row, 4).text()
             tutar = float(self.table.item(selected_row, 5).text().replace(" TL", "").replace(",", ""))
+            kasa_id = self.table.item(selected_row, 0).data(Qt.UserRole)
 
             # Veritabanından servis_id ve kaynak_id bilgilerini al
             conn = sqlite3.connect("oto_servis.db")
@@ -313,8 +337,8 @@ class PaymentHistoryForm(QWidget):
             cursor.execute("""
                 SELECT servis_id, kaynak_id, odeme_kaynagi
                 FROM KASA
-                WHERE plaka = ? AND cari_kodu = ? AND tarih = ? AND tutar = ?
-            """, (plaka, cari_kodu, tarih, tutar))
+                WHERE id = ?
+            """, (kasa_id,))
             row = cursor.fetchone()
             conn.close()
 
@@ -361,25 +385,28 @@ class PaymentHistoryForm(QWidget):
             if not path:
                 return
 
-            # PDF oluştur
-            doc = SimpleDocTemplate(path, pagesize=A4)
+            # PDF oluştur (Türkçe karakterler için iş emri PDF'leriyle aynı font)
+            from pdf_belgeler import turkce_fontlar, liste_tablosu, para_bicimi
+            font_name, _ = turkce_fontlar()
+            doc = SimpleDocTemplate(path, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
+                                    topMargin=15 * mm, bottomMargin=15 * mm)
             styles = getSampleStyleSheet()
-            styles.add(ParagraphStyle(name='Turkish', fontSize=12, leading=16))
-            styles.add(ParagraphStyle(name='TurkishTitle', fontSize=16, leading=20, alignment=1))
-            styles.add(ParagraphStyle(name='TurkishHeader', fontSize=14, leading=18, alignment=1))
+            styles.add(ParagraphStyle(name='Turkish', fontName=font_name, fontSize=12, leading=16))
+            styles.add(ParagraphStyle(name='TurkishTitle', fontName=font_name, fontSize=16, leading=20, alignment=1))
+            styles.add(ParagraphStyle(name='TurkishHeader', fontName=font_name, fontSize=14, leading=18, alignment=1))
 
             elements = []
 
             # Başlık
-            elements.append(Paragraph("ODEME GECMISI", styles['TurkishTitle']))
+            elements.append(Paragraph("ÖDEME GEÇMİŞİ", styles['TurkishTitle']))
             elements.append(Spacer(1, 12))
 
             # Tarih bilgisi
-            elements.append(Paragraph(f"Olusturulma Tarihi: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}", styles['Turkish']))
+            elements.append(Paragraph(f"Oluşturulma Tarihi: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}", styles['Turkish']))
             elements.append(Spacer(1, 12))
 
             # Tablo başlıkları
-            headers = ["Plaka", "Cari Kodu", "Cari Unvani", "Tarih", "Odeme Tipi", "Alinan Tutar"]
+            headers = ["Plaka", "Cari Kodu", "Cari Ünvanı", "Tarih", "Ödeme Tipi", "Alınan Tutar"]
             data = [headers]
 
             # Tablo verileri
@@ -399,7 +426,7 @@ class PaymentHistoryForm(QWidget):
                             try:
                                 tutar = float(item.text().replace(" TL", "").replace(",", ""))
                                 toplam_tutar += tutar
-                                row_data.append(f"{tutar:,.2f} TL")
+                                row_data.append(para_bicimi(tutar))
                             except:
                                 row_data.append(item.text())
                         else:
@@ -408,112 +435,45 @@ class PaymentHistoryForm(QWidget):
                         row_data.append("")
                 data.append(row_data)
 
-            # Tablo oluştur
-            t = Table(data, repeatRows=1, colWidths=[70, 70, 120, 80, 70, 70])
-            t.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-                ('GRID', (0, 0), (-1, -1), 0.7, colors.grey),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ]))
+            # Tablo oluştur (uzun metinler hücre içinde alt satıra kayar, tablo sayfaya sığar)
+            t = liste_tablosu(headers, data[1:], [13, 10, 33, 13, 13, 18], doc.width, sag_hizali={5})
             elements.append(t)
 
             # Alt bilgiler
             elements.append(Spacer(1, 12))
-            elements.append(Paragraph(f"Toplam Kayit: {self.table.rowCount()}", styles['Turkish']))
-            elements.append(Paragraph(f"Toplam Alinan: {toplam_tutar:,.2f} TL", styles['Turkish']))
+            elements.append(Paragraph(f"Toplam Kayıt: {self.table.rowCount()}", styles['Turkish']))
+            elements.append(Paragraph(f"Toplam Alınan: {para_bicimi(toplam_tutar)}", styles['Turkish']))
 
             # PDF'i oluştur
             doc.build(elements)
-            QMessageBox.information(self, "Basarili", "Odeme gecmisi basariyla PDF olarak kaydedildi.")
+            QMessageBox.information(self, "Başarılı", "Ödeme geçmişi başarıyla PDF olarak kaydedildi.")
 
         except Exception as e:
-            QMessageBox.critical(self, "Hata", f"PDF olusturulurken bir hata olustu:\n{str(e)}")
+            QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
     def filter_table(self):
-        """Tabloyu arama kriterine ve tarih aralığına göre filtreler"""
-        search_text = self.cari_filtre.text().strip().lower()
-        baslangic_tarihi = self.baslangic_tarihi.date().toPyDate()
-        bitis_tarihi = self.bitis_tarihi.date().toPyDate()
-        
-        # Tüm satırları gizle
-        for row in range(self.table.rowCount()):
-            self.table.setRowHidden(row, True)
-        
-        # Her satırı kontrol et
-        visible_rows = 0
-        toplam_tutar = 0
-        
-        for row in range(self.table.rowCount()):
-            # Cari Kodu (1), Cari Ünvanı (2) ve Tarih (3) sütunlarını kontrol et
-            cari_kodu = self.table.item(row, 1).text().lower()
-            cari_unvani = self.table.item(row, 2).text().lower()
-            tarih_str = self.table.item(row, 3).text()
-            
-            try:
-                # Tarihi datetime nesnesine çevir
-                tarih = datetime.datetime.strptime(tarih_str, "%d.%m.%Y %H:%M:%S").date()
-                
-                # Tarih aralığı kontrolü
-                tarih_uygun = baslangic_tarihi <= tarih <= bitis_tarihi
-                
-                # Arama metni kontrolü
-                arama_uygun = (not search_text or 
-                             search_text in cari_kodu or 
-                             search_text in cari_unvani)
-                
-                # Eğer hem tarih hem de arama kriterleri uygunsa satırı göster
-                if tarih_uygun and arama_uygun:
-                    self.table.setRowHidden(row, False)
-                    visible_rows += 1
-                    
-                    # Toplam tutarı hesapla
-                    tutar_str = self.table.item(row, 5).text().replace(" TL", "").replace(",", "")
-                    toplam_tutar += float(tutar_str)
-                    
-            except Exception as e:
-                print(f"Tarih dönüştürme hatası: {e}")
-                continue
-        
-        # Alt bilgiyi güncelle
-        gun_farki = (bitis_tarihi - baslangic_tarihi).days + 1
-        self.findChild(QLabel).setText(
-            f"{visible_rows} adet kayıt listeleniyor | "
+        """Arama metni (plaka, cari kodu/adı, telefon, ödeme tipi) ve tarih aralığına uyan ödemeleri listeler."""
+        if not hasattr(self, "tum_odemeler"):
+            return  # Arayüz kurulurken tetiklenen sinyaller
+        baslangic = self.baslangic_tarihi.date().toString("yyyy-MM-dd")
+        bitis = self.bitis_tarihi.date().toString("yyyy-MM-dd")
+        self.table.filtrele(self.cari_filtre.text(), lambda o: baslangic <= str(o[4] or "")[:10] <= bitis)
+        odemeler = self.table.gorunen_kayitlar()
+
+        toplam_tutar = sum(o[6] or 0 for o in odemeler)
+        gun_farki = self.baslangic_tarihi.date().daysTo(self.bitis_tarihi.date()) + 1
+        self.alt_bilgi.setText(
+            f"{len(odemeler)} adet kayıt listeleniyor | "
             f"Toplam Alınan: {toplam_tutar:,.2f} TL | "
             f"{gun_farki} Günlük Kayıt"
         )
 
     def clear_filter(self):
-        """Filtrelemeyi temizler ve tüm satırları gösterir"""
-        # Arama alanını temizle
+        """Filtrelemeyi temizler ve tüm ödemeleri gösterir"""
+        self.cari_filtre.blockSignals(True)
         self.cari_filtre.clear()
-        
-        # Tarih aralığını varsayılan değerlere sıfırla
-        self.baslangic_tarihi.setDate(QDate.currentDate())
-        self.bitis_tarihi.setDate(self.baslangic_tarihi.date().addDays(7))
-        
-        # Tüm satırları göster
-        for row in range(self.table.rowCount()):
-            self.table.setRowHidden(row, False)
-        
-        # Toplam tutarı hesapla
-        toplam_tutar = 0
-        for row in range(self.table.rowCount()):
-            tutar_str = self.table.item(row, 5).text().replace(" TL", "").replace(",", "")
-            toplam_tutar += float(tutar_str)
-        
-        # Alt bilgiyi güncelle
-        self.findChild(QLabel).setText(
-            f"{self.table.rowCount()} adet kayıt listeleniyor | "
-            f"Toplam Alınan: {toplam_tutar:,.2f} TL | "
-            f"7 Günlük Kayıt"
-        )
+        self.cari_filtre.blockSignals(False)
+        self.tarih_araligini_sifirla()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

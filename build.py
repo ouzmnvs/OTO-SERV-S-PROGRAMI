@@ -49,11 +49,7 @@ def create_executable():
         '--add-data=teklif.pdf;.',
         '--add-data=logo.png;.',
         '--add-data=dashboard.png;.',
-        
-        # Add Python DLLs explicitly
-        f'--add-binary={python_dir}\\python312.dll;.',
-        f'--add-binary={python_dir}\\python3.dll;.',
-        
+
         # Essential hidden imports
         '--hidden-import=PyQt5.QtCore',
         '--hidden-import=PyQt5.QtGui',
@@ -78,6 +74,8 @@ def create_executable():
         
         # Collect necessary modules
         '--collect-submodules=qtawesome',
+        '--collect-submodules=fontTools.ttLib.tables',  # PDF fontları için; tablo modülleri dinamik yüklenir
+        '--hidden-import=fontTools.subset',
         '--collect-data=reportlab',
         '--collect-data=PIL',
         '--collect-data=PyQt5',

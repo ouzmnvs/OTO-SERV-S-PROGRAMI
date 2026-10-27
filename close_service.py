@@ -7,7 +7,7 @@ import sys
 from database_progress import load_closed_services, get_service_full_details, get_db_connection  # get_service_full_details ve get_db_connection'ı ekleyin
 from odeme_al import OdemeAlForm
 from database_progress import delete_service
-from pdf_oluşturucu import mevcut_pdf_duzenle
+from hizli_tablo import HizliTablo
 
 class CloseServiceForm(QWidget):
     def __init__(self):
@@ -139,11 +139,15 @@ class CloseServiceForm(QWidget):
 
         filtre_layout.addWidget(btn_filtrele)
         filtre_layout.addWidget(btn_temizle)
+        btn_filtrele.clicked.connect(self.filtrele)
+        btn_temizle.clicked.connect(self.filtreyi_temizle)
+        self.filtre_input.returnPressed.connect(self.filtrele)
+        self.filtre_input.textChanged.connect(self.filtrele)
 
         ana_layout.addLayout(filtre_layout)
 
-        # Tablo
-        self.table = QTableWidget(4, 8)
+        # Tablo (binlerce kapalı serviste de hızlı kalması için yalnızca görünen satırları çizer)
+        self.table = HizliTablo()
         self.table.setHorizontalHeaderLabels(["Araç Plakası", "Araç Tipi", "Cari Kodu", "Cari Ünvanı", "Telefon", "Tarih", "Tutar", "Aracı Getiren"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -153,7 +157,7 @@ class CloseServiceForm(QWidget):
         # Tablo için dinamik font boyutu
         table_font_size = int(screen_height * 0.016)  # Increased from 0.011
         self.table.setStyleSheet(f"""
-            QTableWidget {{
+            QTableView {{
                 font-size: {table_font_size}px;
                 alternate-background-color: #f5f5f5;
                 background: #fff;
@@ -198,8 +202,12 @@ class CloseServiceForm(QWidget):
 
         # Başlangıç tarihi değişince bitiş tarihini otomatik 7 gün sonrası yap
         self.baslangic_tarihi.dateChanged.connect(self.bitis_tarihini_guncelle)
+        self.baslangic_tarihi.dateChanged.connect(self.filtrele)
+        self.bitis_tarihi.dateChanged.connect(self.filtrele)
 
+        self.tum_servisler = []
         self.load_closed_services_to_table()
+        self.tarih_araligini_sifirla()
 
     def update_alt_bilgi_tarih(self):
         """Başlangıç ve bitiş tarihlerini alt bilgiye yansıt."""
@@ -321,19 +329,51 @@ class CloseServiceForm(QWidget):
         return btn
 
     def load_closed_services_to_table(self):
-        closed_services = load_closed_services_with_kapanis_tutari()
-        self.table.setRowCount(len(closed_services))
-        for row, (servis_id, arac_tipi, cari_kodu, cari_unvan, telefon, plaka, tarih, kapanis_tutar, arac_getiren_kisi, islem_sayisi) in enumerate(closed_services):
-            item_plaka = QTableWidgetItem(plaka or "")
-            item_plaka.setData(Qt.UserRole, servis_id)
-            self.table.setItem(row, 0, item_plaka)
-            self.table.setItem(row, 1, QTableWidgetItem(arac_tipi or ""))
-            self.table.setItem(row, 2, QTableWidgetItem(cari_kodu or ""))
-            self.table.setItem(row, 3, QTableWidgetItem(cari_unvan or ""))
-            self.table.setItem(row, 4, QTableWidgetItem(telefon or ""))
-            self.table.setItem(row, 5, QTableWidgetItem(tarih or ""))
-            self.table.setItem(row, 6, QTableWidgetItem(f"{(kapanis_tutar or 0):,.2f}"))
-            self.table.setItem(row, 7, QTableWidgetItem(arac_getiren_kisi or ""))
+        """Kapalı servisleri veritabanından okur ve mevcut filtreyi uygulayarak tabloya yazar."""
+        self.tum_servisler = load_closed_services_with_kapanis_tutari()
+        # (servis_id, arac_tipi, cari_kodu, cari_unvan, telefon, plaka, tarih, tutar, arac_getiren_kisi, islem_sayisi)
+        self.table.kayitlari_yukle(
+            self.tum_servisler,
+            hucreler=lambda s: (s[5], s[1], s[2], s[3], s[4], s[6], f"{(s[7] or 0):,.2f}", s[8]),
+            kimlik=lambda s: s[0],
+            arama_alanlari=lambda s: (s[5], s[1], s[2], s[3], s[4], s[8]),
+        )
+        self.filtrele()
+
+    def tarih_araligini_sifirla(self):
+        """Tarih aralığını tüm kayıtları kapsayacak şekilde ayarlar (yalnızca metinle arama da çalışsın)."""
+        # ISO tarihler metin olarak sıralanabilir; yalnızca en küçük ve en büyük tarih çözülür
+        gunler = [str(s[6])[:10] for s in self.tum_servisler if s[6]]
+        tarihler = [QDate.fromString(g, "yyyy-MM-dd") for g in (min(gunler), max(gunler))] if gunler else []
+        tarihler = [t for t in tarihler if t.isValid()]
+        bugun = QDate.currentDate()
+        for tarih_alani in (self.baslangic_tarihi, self.bitis_tarihi):
+            tarih_alani.blockSignals(True)
+        self.baslangic_tarihi.setDate(min(tarihler + [bugun]))
+        self.bitis_tarihi.setDate(max(tarihler + [bugun]))
+        for tarih_alani in (self.baslangic_tarihi, self.bitis_tarihi):
+            tarih_alani.blockSignals(False)
+        self.filtrele()
+
+    def filtreyi_temizle(self):
+        self.filtre_input.blockSignals(True)
+        self.filtre_input.clear()
+        self.filtre_input.blockSignals(False)
+        self.tarih_araligini_sifirla()
+
+    def filtrele(self):
+        """Arama metni ve servis tarihi aralığına uyan kapalı servisleri tabloya yazar."""
+        if not hasattr(self, "tum_servisler"):
+            return  # Arayüz kurulurken tetiklenen sinyaller
+        baslangic = self.baslangic_tarihi.date().toString("yyyy-MM-dd")
+        bitis = self.bitis_tarihi.date().toString("yyyy-MM-dd")
+        self.table.filtrele(self.filtre_input.text(), lambda s: baslangic <= str(s[6] or "")[:10] <= bitis)
+        servisler = self.table.gorunen_kayitlar()
+        toplam = sum(s[7] or 0 for s in servisler)
+        self.alt_bilgi_tarih.setText(
+            f"{len(servisler)} kayıt | Toplam: {toplam:,.2f} TL | "
+            f"{self.baslangic_tarihi.date().toString('dd.MM.yyyy')} - {self.bitis_tarihi.date().toString('dd.MM.yyyy')}"
+        )
 
     def odeme_al_ac(self):
         selected_row = self.table.currentRow()
@@ -442,105 +482,8 @@ class CloseServiceForm(QWidget):
         try:
             # Seçili satırdan servis ID'sini al
             servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)
-            
-            # Servis detaylarını getir
-            detaylar = get_service_full_details(servis_id)
-            if not detaylar:
-                QMessageBox.warning(self, "Uyarı", "Servis detayları bulunamadı!")
-                return
-
-            # Servis, cari ve araç bilgilerini al
-            servis = detaylar["servis"]
-            cari = detaylar["cari"]
-            arac = detaylar["arac"]
-            islemler = detaylar["islemler"]
-
-            # İş emri numarasını 6 haneli formatta hazırla
-            is_emri_no = f"{int(servis['id']):06d}"
-
-            # İşlemleri PDF için hazırla
-            islem_texts = []
-            y_start = 152.5
-            line_height = 3.7
-            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)  # KDV hariç toplam = işlemlerin toplamı
-            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
-            genel_toplam = toplam_kdv_haric + kdv_tutari_genel  # Genel toplam = KDV hariç toplam + KDV tutarı
-
-            # İşlemleri sırayla işle
-            for i, islem in enumerate(islemler, 1):
-                islem_texts.extend([
-                    (10, y_start - (i * line_height), str(i)),
-                    (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
-                    (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat
-                    (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar
-                    (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
-                    (170, y_start - (i * line_height), f"0.0%"),  # KDV oranı
-                    (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
-                ])
-
-            # Vergi numarası kontrolü
-            vergi_no = cari.get('vergi_no', '')
-            if vergi_no is None:
-                vergi_no = ''
-
-            # PDF için eklemeler sözlüğünü oluştur
-            eklemeler = {
-                'text': [
-                    (159, 260, is_emri_no),
-                    (90, 259.6, f"{servis['plaka']}"),
-                ]
-            }
-
-            # Cari ad unvanını bölme mantığı
-            cari_ad_unvan = cari.get('cari_ad_unvan', '')
-            cari_ad_unvan_lines = self.split_cari_ad_unvan(cari_ad_unvan)
-
-            # Her satırı PDF'e ekle (cari adı için font boyutu 8)
-            for i, line in enumerate(cari_ad_unvan_lines):
-                eklemeler['text'].append((45, 250 - (i * 5), line, 8))
-
-            # Diğer bilgileri ekle (font 9)
-            eklemeler['text'].extend([
-                (50, 237, f"{cari.get('cep_telefonu', '')}", 9),
-                (50, 232, f"{vergi_no}", 9),
-                (50, 223, f"{arac.get('arac_tipi', '')}", 9),
-                (50, 218, f"{arac.get('marka', '')} {arac.get('model', '')}", 9),
-                (50, 211, f"{arac.get('model_yili', '')}", 9),
-                (120, 223, f"{arac.get('sasi_no', '')}", 9),
-                (120, 218, f"{arac.get('motor_no', '')}", 9),
-                (58, 204.5, f"{servis['servis_tarihi']}", 9),
-                (58, 191.5, f"{servis['servis_tarihi']}", 9),
-                (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{toplam_kdv_haric} TL", 9),
-                (175, 63, f"{kdv_tutari_genel} TL", 9),
-                (175, 58, f"{genel_toplam} TL", 9)
-            ])
-
-            # İşlemleri eklemeler listesine ekle (font 7.5)
-            for item in islem_texts:
-                if len(item) == 3:
-                    eklemeler['text'].append((*item, 7.5))
-                else:
-                    eklemeler['text'].append(item)
-
-
-            # Dosya kaydetme dialogunu göster
-            default_filename = f"servis_{is_emri_no}_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "PDF Dosyasını Kaydet",
-                default_filename,
-                "PDF Dosyaları (*.pdf)"
-            )
-
-            if file_path:
-                # PDF'i oluştur
-                mevcut_pdf_duzenle("classiccar.pdf", file_path, eklemeler, font_size=10)
-                QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
-            else:
-                QMessageBox.information(self, "Bilgi", "PDF oluşturma işlemi iptal edildi.")
-
+            from pdf_aktar import servis_pdf_aktar
+            servis_pdf_aktar(self, servis_id, varsayilan="fatura")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
@@ -606,31 +549,8 @@ def load_closed_services_with_kapanis_tutari():
             WHERE s.servis_durumu = 'Kapalı'
             ORDER BY s.id DESC
         """)
-        services = cursor.fetchall()
-        
-        # Her servis için kalan tutarı hesapla
-        updated_services = []
-        for service in services:
-            servis_id = service[0]
-            servis_tutar_db = service[7] # Veritabanından gelen servis_tutar
-            
-            # Yapılan ödemeleri hesapla
-            cursor.execute("""
-                SELECT COALESCE(SUM(tutar), 0)
-                FROM KASA 
-                WHERE servis_id = ? AND odeme_kaynagi = 'SERVIS'
-            """, (servis_id,))
-            odenen_tutar = cursor.fetchone()[0]
-            
-            # Kalan tutarı hesapla
-            kalan_tutar = servis_tutar_db 
-            
-            # Servis bilgilerini güncelle
-            updated_service = list(service)
-            updated_service[7] = kalan_tutar  # servis_tutar sütununu kalan tutar ile güncelle
-            updated_services.append(tuple(updated_service))
-        
-        return updated_services
+        # servis_tutar, ödeme alındıkça odeme_al() tarafından düşüldüğü için zaten kalan bakiyedir
+        return cursor.fetchall()
     except sqlite3.Error as e:
         print(f"Veritabanı hatası: {e}")
         return []

@@ -7,6 +7,21 @@ from qtawesome import icon
 import sys
 import sqlite3
 
+def sonraki_cari_kodu(cursor):
+    """
+    Sayısal cari kodlarının en büyüğünden bir sonrakini aynı basamak sayısıyla döndürür (00009 -> 00010).
+    Harf içeren kodlar (örn. C001) hesaba katılmaz; hiç sayısal kod yoksa 00001 döner.
+    """
+    cursor.execute("""
+        SELECT MAX(CAST(cari_kodu AS INTEGER)), MAX(LENGTH(cari_kodu))
+        FROM cariler
+        WHERE cari_kodu <> '' AND cari_kodu NOT GLOB '*[^0-9]*'
+    """)
+    en_buyuk, uzunluk = cursor.fetchone()
+    if en_buyuk is None:
+        return "00001"
+    return str(en_buyuk + 1).zfill(max(5, uzunluk))
+
 class AddCariForm(QDialog):
     def __init__(self, dashboard_ref=None, on_saved=None):
         super().__init__()
@@ -41,7 +56,24 @@ class AddCariForm(QDialog):
             y = 0
         self.move(x, y)
         self.init_ui()
+        self.cari_kodunu_doldur()
         self.setWindowIcon(icon('fa5s.file')) # Add a file icon
+
+    def cari_kodunu_doldur(self):
+        """Cari kodunu otomatik verir; veritabanı okunamazsa alan elle girişe açık kalır."""
+        try:
+            conn = sqlite3.connect("oto_servis.db")
+            try:
+                self.cari_kodu.setText(sonraki_cari_kodu(conn.cursor()))
+            finally:
+                conn.close()
+        except sqlite3.Error as e:
+            print(f"Cari kodu otomatik verilemedi: {e}")
+            return
+        self.cari_kodu.setReadOnly(True)
+        self.cari_kodu.setToolTip("Cari kodu otomatik verilir")
+        self.cari_kodu.setStyleSheet(self.cari_kodu.styleSheet() + "QLineEdit { background: #eceff1; color: #555; }")
+
     def init_ui(self):
         ana_layout = QVBoxLayout()
         ana_layout.setSpacing(18)
@@ -204,6 +236,10 @@ class AddCariForm(QDialog):
         try:
             conn = sqlite3.connect("oto_servis.db")
             cursor = conn.cursor()
+            if self.cari_kodu.isReadOnly():
+                # Form açıkken başka bir pencereden cari eklenmiş olabilir; kodu kayıt anında yeniden al
+                cari_kodu = sonraki_cari_kodu(cursor)
+                self.cari_kodu.setText(cari_kodu)
             cursor.execute("SELECT 1 FROM cariler WHERE cari_kodu = ?", (cari_kodu,))
             if cursor.fetchone():
                 QMessageBox.warning(self, "Tekrarlı Kayıt", "Bu cari kodu zaten kayıtlı!")
@@ -214,7 +250,7 @@ class AddCariForm(QDialog):
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (cari_kodu, cari_unvan, cari_tipi, tc_kimlik_no, vergi_no, cep_telefonu, aciklama))
             conn.commit()
-            QMessageBox.information(self, "Başarılı", "Cari başarıyla eklendi!")
+            QMessageBox.information(self, "Başarılı", f"Cari başarıyla eklendi!\nCari Kodu: {cari_kodu}")
             self.accept()  # Modalı kapat ve Accepted olarak dön
             if self.on_saved:
                 self.on_saved()

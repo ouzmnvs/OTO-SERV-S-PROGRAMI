@@ -6,11 +6,9 @@ from PyQt5.QtWidgets import (
 from qtawesome import icon  # qtawesome kütüphanesini ekleyin
 import sys
 from database_progress import load_teklifler, delete_teklif, get_teklif_id_by_no, get_teklif_details
+from arama import eslesir
 from PyQt5.QtCore import Qt
-from pdf_oluşturucu import mevcut_pdf_duzenle
 import os
-from reportlab.lib.units import mm
-from reportlab.lib.pagesizes import A4
 from PyQt5.QtGui import QIcon # Import QIcon
 
 
@@ -207,6 +205,8 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
         self.btn_close.clicked.connect(self.close)
         # Filtrele butonuna tıklama olayını bağla
         self.btn_filter.clicked.connect(self.filter_table)
+        self.search_input.returnPressed.connect(self.filter_table)
+        self.search_input.textChanged.connect(self.filter_table)
         # Temizle butonuna tıklama olayını bağla
         self.btn_clear.clicked.connect(self.clear_filter)
 
@@ -341,91 +341,8 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
         teklif_no = self.table.item(row, 0).text()
 
         try:
-            # Veritabanından teklif detaylarını al
-            detaylar = get_teklif_details(teklif_no)
-            if not detaylar:
-                QMessageBox.warning(self, "Uyarı", "Teklif detayları bulunamadı!")
-                return
-
-            # Teklif, cari ve araç bilgilerini al
-            teklif = detaylar["teklif"]
-            cari = detaylar["cari"]
-            arac = detaylar["arac"]
-            islemler = detaylar["islemler"]
-
-            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
-            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler) 
-            genel_toplam = toplam_kdv_haric + kdv_tutari_genel # Genel toplam = işlemlerin toplamı
-           
-             # KDV hariç toplam = genel toplam - KDV tutarı
-
-            # İşlemleri PDF için hazırla
-            islem_texts = []
-            y_baslangic = 119.5  # İlk işlem satırının Y koordinatı
-            satir_yuksekligi = 3.5  # Her işlem satırı arasındaki Y mesafesi
-
-            for i, islem in enumerate(islemler, 1):
-                islem_texts.extend([
-                    # Sıra No
-                    (7.5, y_baslangic - (i - 1) * satir_yuksekligi, str(i)),
-                    # İşlem Açıklaması
-                    (29.5, y_baslangic - (i - 1) * satir_yuksekligi, islem["islem_aciklama"]),
-                    # Miktar
-                    (77.5, y_baslangic - (i - 1) * satir_yuksekligi, str(islem.get('miktar', 1))),
-                    # Birimi
-                    (87.5, y_baslangic - (i - 1) * satir_yuksekligi, "ADET"),
-                    # Birim Fiyat
-                    (96.5, y_baslangic - (i - 1) * satir_yuksekligi, f"{islem['islem_tutari'] / islem.get('miktar', 1):,.2f}"),
-                    # İsk.%
-                    (112, y_baslangic - (i - 1) * satir_yuksekligi, "0.0%"),
-                    # Toplam Fiyat
-                    (120, y_baslangic - (i - 1) * satir_yuksekligi, f"{islem['islem_tutari']:,.2f}")
-                ])
-
-            # PDF için eklemeler sözlüğünü oluştur
-            eklemeler = {
-                'text': [
-                    # 🔴 Teklif No & Plaka (PDF sağ üst tarafı)
-                    (115, 160.8, str(teklif["teklif_no"])),  # Teklif No
-                    (39, 145, f"{teklif['plaka']}"),  # Plaka
-
-                    # 🔵 Cari Bilgileri
-                    (39, 155.5, f"{cari['cari_ad_unvan']}"),
-                    (39, 142, f"{cari['cep_telefonu']}"),
-
-                    # 🟣 Tarihler
-                    (110, 164, f"{teklif['teklif_tarihi']}"),
-                    (96.8, 157.5, f"Teklif Geçerlilik: {teklif['gecerlilik_tarihi']}"),
-
-                    # 🧾 Tutar Bilgileri (Sağ alt)
-                    (116, 51.5, f"{toplam_kdv_haric:,.2f} TL"),  # KDV Hariç Toplam
-                    (116, 49, f"{0:,.2f} TL"),  # İndirimli Tutar (Sabit 0)
-                    (116, 46.3, f"{toplam_kdv_haric:,.2f} TL"),  # İndirimli Ara Toplam (KDV Hariç Toplam ile aynı)
-                    (116, 43.9, f"{kdv_tutari_genel:,.2f} TL"),  # KDV Tutarı (İşlemlerin KDV tutarları toplamı)
-                    (116, 40.8, f"{genel_toplam:,.2f} TL")  # Genel Toplam (İşlemlerin toplamı)
-                ]
-            }
-
-            # İşlemleri eklemeler listesine ekle
-            eklemeler['text'].extend(islem_texts)
-
-            # Dosya kaydetme dialogunu göster
-            default_filename = f"teklif_{teklif['teklif_no']}_{teklif['teklif_tarihi']}.pdf"
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "PDF'i Kaydet",
-                default_filename,
-                "PDF Dosyaları (*.pdf)"
-            )
-
-            if file_path:  # Eğer kullanıcı bir dosya yolu seçtiyse
-                # PDF'i oluştur
-                mevcut_pdf_duzenle("teklif.pdf", file_path, eklemeler, font_size=6)
-                QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
-            else:
-                QMessageBox.information(self, "İptal", "PDF oluşturma işlemi iptal edildi.")
-
+            from pdf_aktar import teklif_pdf_aktar
+            teklif_pdf_aktar(self, teklif_no)
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu: {str(e)}")
 
@@ -446,7 +363,9 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
             # Hücreleri doldur
             self.table.setItem(row_idx, 0, QTableWidgetItem(str(teklif[0])))  # Teklif No
             self.table.setItem(row_idx, 1, QTableWidgetItem(str(teklif[1])))  # Cari Kodu
-            self.table.setItem(row_idx, 2, QTableWidgetItem(str(teklif[2])))  # Cari Ünvanı
+            item_unvan = QTableWidgetItem(str(teklif[2]))  # Cari Ünvanı
+            item_unvan.setData(Qt.UserRole, teklif[9] or "")  # Telefon (aramada kullanılır)
+            self.table.setItem(row_idx, 2, item_unvan)
             self.table.setItem(row_idx, 3, QTableWidgetItem(str(teklif[3])))  # Plaka
             self.table.setItem(row_idx, 4, QTableWidgetItem(str(teklif[4])))  # Teklif Tarihi
             self.table.setItem(row_idx, 5, QTableWidgetItem(str(teklif[5])))  # Geçerlilik Tarihi
@@ -483,36 +402,27 @@ class AddOfferForm(QMainWindow):  # Sınıf adı AddOfferForm olarak değiştiri
         toplam_tutar = sum(try_float(teklif[7]) for teklif in teklifler)
         self.footer_label.setText(f"{len(teklifler)} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:,.2f} TL")
 
+        # Silme/düzenleme sonrası yenilemede mevcut arama korunur
+        if self.search_input.text().strip():
+            self.filter_table()
+
     def filter_table(self):
-        """Tabloyu arama kriterine göre filtreler"""
-        search_text = self.search_input.text().strip().lower()
-        
-        # Tüm satırları gizle
+        """Arama metnine (teklif no, cari kodu/adı, plaka, telefon, durum) göre satırları gösterir/gizler."""
+        search_text = self.search_input.text()
+        visible_rows = 0
+        toplam_tutar = 0.0
         for row in range(self.table.rowCount()):
-            self.table.setRowHidden(row, True)
-        
-        # Eğer arama metni boşsa tüm satırları göster
-        if not search_text:
-            for row in range(self.table.rowCount()):
-                self.table.setRowHidden(row, False)
-            return
-        
-        # Her satırı kontrol et
-        for row in range(self.table.rowCount()):
-            # Cari Kodu (1), Cari Ünvanı (2) ve Plaka (3) sütunlarını kontrol et
-            cari_kodu = self.table.item(row, 1).text().lower()
-            cari_unvani = self.table.item(row, 2).text().lower()
-            plaka = self.table.item(row, 3).text().lower()
-            
-            # Arama metni bu alanlardan herhangi birinde varsa satırı göster
-            if (search_text in cari_kodu or 
-                search_text in cari_unvani or 
-                search_text in plaka):
-                self.table.setRowHidden(row, False)
-        
-        # Görünen satır sayısını footer'da göster
-        visible_rows = sum(1 for row in range(self.table.rowCount()) if not self.table.isRowHidden(row))
-        self.footer_label.setText(f"{visible_rows} adet kayıt listeleniyor")
+            hucreler = [self.table.item(row, col).text() if self.table.item(row, col) else "" for col in range(9)]
+            telefon = self.table.item(row, 2).data(Qt.UserRole) if self.table.item(row, 2) else ""
+            gorunur = eslesir(search_text, hucreler[0], hucreler[1], hucreler[2], hucreler[3], telefon, hucreler[8])
+            self.table.setRowHidden(row, not gorunur)
+            if gorunur:
+                visible_rows += 1
+                try:
+                    toplam_tutar += float(hucreler[7])
+                except ValueError:
+                    pass
+        self.footer_label.setText(f"{visible_rows} adet kayıt listeleniyor | Toplam Tutar: {toplam_tutar:,.2f} TL")
 
     def clear_filter(self):
         """Filtrelemeyi temizler ve tüm satırları gösterir"""

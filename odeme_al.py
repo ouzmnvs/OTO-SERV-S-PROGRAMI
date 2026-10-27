@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QDateEdit, QPushButton, QMessageBox
 )
 from PyQt5.QtCore import QDate
+from sayi import sayi_oku
 # from database_progress import odeme_al
 class OdemeAlForm(QDialog):
     def __init__(self, servis_id, cari_kodu, cari_ad_unvan, telefon, toplam_tutar, parent=None, plaka="", odeme_kaynagi="SERVIS", kaynak_id=None):
@@ -75,7 +76,10 @@ class OdemeAlForm(QDialog):
 
     def kaydet(self):
         try:
-            tutar = float(self.tutar.text())
+            try:
+                tutar = sayi_oku(self.tutar.text())  # "1500,50" ve "1.500,50" yazımları da kabul edilir
+            except ValueError:
+                raise ValueError("Tutar geçerli bir sayı olmalıdır! (Örnek: 1500 veya 1500,50)")
             if tutar <= 0:
                 raise ValueError("Tutar sıfırdan büyük olmalıdır.")
             if tutar > self.toplam_tutar:
@@ -122,8 +126,8 @@ class OdemeAlForm(QDialog):
 def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, plaka, odeme_kaynagi="SERVIS", kaynak_id=None):
     import sqlite3
     from datetime import datetime
+    conn = sqlite3.connect("oto_servis.db")
     try:
-        conn = sqlite3.connect("oto_servis.db")
         cursor = conn.cursor()
         tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
@@ -152,7 +156,9 @@ def odeme_al(cari_kodu, servis_id, tutar, odeme_tipi, aciklama, cari_ad_unvan, p
             
         conn.commit()
     except sqlite3.Error as e:
+        # Hata yutulursa form "başarıyla kaydedildi" diyordu; çağırana iletilir ve kullanıcıya gösterilir
         print(f"Ödeme kaydedilemedi: {e}")
+        raise
     finally:
         conn.close()
 

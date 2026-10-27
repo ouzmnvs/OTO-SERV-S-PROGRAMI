@@ -3,11 +3,13 @@ from PyQt5.QtWidgets import (
     QGroupBox, QComboBox, QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QFrame, QMessageBox, QDialog, QTextEdit
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIntValidator
 from qtawesome import icon
 import sys
 from cari_select_list import CariSelectListForm  # CariSelectListForm'u içe aktarın
 from car_select_list import CarSelectListForm  # CarSelectListForm'u içe aktarın
-from database_progress import add_servis, add_islem, add_teklif_islem, delete_teklif_islem, update_teklif_tutar, load_servis_kayitlari_by_plaka, get_service_full_details  # Servis ekleme fonksiyonunu içe aktarın
+from database_progress import add_servis_ve_islemler, load_servis_kayitlari_by_plaka, get_son_km
+from sayi import sayi_oku
 from datetime import datetime
 class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
     def __init__(self, dashboard_ref=None):
@@ -168,6 +170,13 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.arac_getiren_kisi = QLineEdit()
         self.arac_getiren_kisi.setStyleSheet(input_style)
         bilgi_layout.addWidget(self.arac_getiren_kisi, 10, 1, 1, 2)
+
+        bilgi_layout.addWidget(self._label("Giriş KM", label_style), 11, 0)
+        self.giris_km = QLineEdit()
+        self.giris_km.setStyleSheet(input_style)
+        self.giris_km.setValidator(QIntValidator(0, 9999999, self))
+        self.giris_km.setPlaceholderText("Aracın servise giriş kilometresi")
+        bilgi_layout.addWidget(self.giris_km, 11, 1, 1, 2)
 
         arac_sec_btn = QPushButton(icon('fa5s.car', color='blue'), "Seç")
         arac_sec_btn.setMinimumHeight(28)
@@ -378,8 +387,8 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.setLayout(ana_layout)
 
         # Input alanlarına size policy ekle
-        for widget in [self.cari_kodu, self.cari_unvan, self.telefon, self.plaka, 
-                      self.model_yili, self.marka, self.model, self.arac_getiren_kisi]:
+        for widget in [self.cari_kodu, self.cari_unvan, self.telefon, self.plaka,
+                      self.model_yili, self.marka, self.model, self.arac_getiren_kisi, self.giris_km]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             widget.setMinimumWidth(200)
 
@@ -413,6 +422,12 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.marka.setText(marka)
         self.model.setText(model)
         self.arac_getiren_kisi.clear()  # Aracı getiren kişi alanını temizle
+        self.giris_km.clear()
+        son_km = get_son_km(plaka) if plaka else None
+        if son_km:
+            self.giris_km.setPlaceholderText(f"Son kayıtlı: {son_km:,} km".replace(",", "."))
+        else:
+            self.giris_km.setPlaceholderText("Aracın servise giriş kilometresi")
         self.load_servis_kayitlari()  # Servis kayıtlarını yükle
 
     def load_servis_kayitlari(self):
@@ -425,12 +440,12 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         kayitlar = load_servis_kayitlari_by_plaka(plaka)
         self.gecmis_table.setRowCount(len(kayitlar))
         for row, (servis_id, tarih, tutar, durum, aciklama) in enumerate(kayitlar):
-            item_tarih = QTableWidgetItem(tarih)
+            item_tarih = QTableWidgetItem(tarih or "")
             item_tarih.setData(Qt.UserRole, servis_id) # servis_id'yi Qt.UserRole'a sakla
             self.gecmis_table.setItem(row, 0, item_tarih)
-            self.gecmis_table.setItem(row, 1, QTableWidgetItem(f"{tutar:,.2f} TL"))
-            self.gecmis_table.setItem(row, 2, QTableWidgetItem(durum))
-            self.gecmis_table.setItem(row, 3, QTableWidgetItem(aciklama))
+            self.gecmis_table.setItem(row, 1, QTableWidgetItem(f"{tutar or 0:,.2f} TL"))
+            self.gecmis_table.setItem(row, 2, QTableWidgetItem(durum or ""))
+            self.gecmis_table.setItem(row, 3, QTableWidgetItem(aciklama or ""))
 
     def _label(self, text, style):
         lbl = QLabel(text)
@@ -485,16 +500,19 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             return
 
         try:
-            # KDV oranını ve tutarı float'a dönüştür
-            kdv_orani = float(kdv_orani)
-            birim_tutar = float(islem_tutari)  # Birim tutar
+            # KDV oranını ve tutarı sayıya dönüştür ("1500,50" ve "1.500,50" yazımları da kabul edilir)
+            kdv_orani = sayi_oku(kdv_orani)
+            birim_tutar = sayi_oku(islem_tutari)  # Birim tutar
             islem_tutari_float = birim_tutar * miktar  # Toplam tutar = birim tutar * miktar
             kdv_tutari = islem_tutari_float * kdv_orani / 100
 
             # İşlemi tabloya ekle
             row_count = self.islem_table.rowCount()
             self.islem_table.insertRow(row_count)
-            self.islem_table.setItem(row_count, 0, QTableWidgetItem(f"{islem_aciklama} ({miktar})"))
+            item_aciklama = QTableWidgetItem(f"{islem_aciklama} ({miktar})")
+            # Açıklama ve miktar ayrıca saklanır; açıklamada parantez olsa da miktar doğru okunur
+            item_aciklama.setData(Qt.UserRole, [islem_aciklama, miktar])
+            self.islem_table.setItem(row_count, 0, item_aciklama)
             self.islem_table.setItem(row_count, 1, QTableWidgetItem(f"{islem_tutari_float:.2f}"))
             self.islem_table.setItem(row_count, 2, QTableWidgetItem(f"{kdv_orani:.2f}"))
             self.islem_table.setItem(row_count, 3, QTableWidgetItem(f"{kdv_tutari:.2f}"))
@@ -561,24 +579,35 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
             uyari.exec_()
             return
 
-        # Servis ve işlemleri kaydet
-        servis_id = add_servis(cari_kodu, plaka, servis_tarihi, aciklama, arac_getiren_kisi)
+        # Servis ve işlemleri tek seferde kaydet
+        islemler = []
         for row in range(toplam_islem):
-            islem_aciklama = self.islem_table.item(row, 0).text()
-            # Miktar bilgisini parantez içinden çıkar
-            miktar = 1
-            if '(' in islem_aciklama and ')' in islem_aciklama:
-                try:
-                    miktar = int(islem_aciklama[islem_aciklama.find('(')+1:islem_aciklama.find(')')])
-                    islem_aciklama = islem_aciklama[:islem_aciklama.find('(')].strip()
-                except:
-                    pass
+            saklanan = self.islem_table.item(row, 0).data(Qt.UserRole)
+            if saklanan:
+                islem_aciklama, miktar = saklanan[0], int(saklanan[1])
+            else:
+                # Miktar bilgisini sondaki parantez içinden çıkar
+                islem_aciklama = self.islem_table.item(row, 0).text()
+                miktar = 1
+                if islem_aciklama.endswith(')') and '(' in islem_aciklama:
+                    try:
+                        miktar = int(islem_aciklama[islem_aciklama.rfind('(')+1:-1])
+                        islem_aciklama = islem_aciklama[:islem_aciklama.rfind('(')].strip()
+                    except ValueError:
+                        miktar = 1
 
             islem_tutari = float(self.islem_table.item(row, 1).text())
             kdv_orani = float(self.islem_table.item(row, 2).text())
             kdv_tutari = float(self.islem_table.item(row, 3).text())
             islem_aciklama_ek = self.islem_table.item(row, 4).text()
-            add_islem(servis_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, islem_aciklama_ek, miktar)
+            islemler.append((islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, islem_aciklama_ek, miktar))
+
+        try:
+            giris_km = int(self.giris_km.text()) if self.giris_km.text().strip() else None
+        except ValueError:
+            QMessageBox.warning(self, "Uyarı", "Giriş KM geçerli bir sayı olmalıdır!")
+            return
+        add_servis_ve_islemler(cari_kodu, plaka, servis_tarihi, aciklama, arac_getiren_kisi, islemler, giris_km=giris_km)
 
         # Formu temizle
         self.islem_table.setRowCount(0)
@@ -594,6 +623,7 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.model.clear()
         self.musteri_talepleri.clear()  # Müşteri taleplerini temizle
         self.arac_getiren_kisi.clear()
+        self.giris_km.clear()
 
         # Bilgilendirme penceresini göster
         bilgi = BilgilendirmePenceresi(self)
@@ -613,118 +643,18 @@ class ServisForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
     def handle_service_double_click(self, row, column):
         """Servis kaydına çift tıklandığında PDF oluşturur."""
-        from PyQt5.QtWidgets import QFileDialog
-
         item = self.gecmis_table.item(row, 0) # Tarih öğesini al
         if not item:
             QMessageBox.warning(self, "Uyarı", "Servis kaydı bulunamadı!")
             return
-        
+
         servis_id = item.data(Qt.UserRole) # servis_id'yi Qt.UserRole'dan al
         if not servis_id:
             QMessageBox.warning(self, "Uyarı", "Servis ID bulunamadı!")
             return
 
-        # Servis detaylarını al
-        detaylar = get_service_full_details(servis_id)
-        if not detaylar:
-            QMessageBox.warning(self, "Uyarı", "Servis detayları alınamadı!")
-            return
-
-        # Detayları ayrıştır
-        servis_bilgi = detaylar["servis"]
-        cari_bilgi = detaylar["cari"]
-        arac_bilgi = detaylar["arac"]
-        islem_listesi = detaylar["islemler"]
-
-        # Vergi numarası kontrolü
-        vergi_no = cari_bilgi.get('vergi_no', '')
-        if vergi_no is None:
-            vergi_no = ''
-
-        # İş emri numarasını 6 haneli formatta hazırla
-        is_emri_no = f"{servis_id:06d}"
-
-        # Dosya adını hazırla
-        default_filename = f"servis_{is_emri_no}_{self.plaka.text()}_{item.text()}.pdf"
-        dosya_yolu, _ = QFileDialog.getSaveFileName(self, "PDF Olarak Kaydet", default_filename, "PDF Files (*.pdf)")
-        if not dosya_yolu:
-            return
-
-        # İşlemleri PDF için hazırla
-        islem_texts = []
-        y_baslangic = 155  # 92.5 * 1.67
-        satir_yuksekligi = 6  # 3.5 * 1.67
-
-        # Toplam tutarları hesapla
-        kdv_haric_toplam = sum(islem['islem_tutari'] for islem in islem_listesi)
-        kdv_tutari = sum(islem['kdv_tutari'] for islem in islem_listesi)
-        toplam_tutar = kdv_haric_toplam + kdv_tutari
-
-        # İşlemleri PDF için hazırla
-        for i, islem in enumerate(islem_listesi, 1):
-            islem_texts.extend([
-                (10, y_baslangic - (i * satir_yuksekligi), str(i)),
-                (30, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_aciklama']} {islem['aciklama']}"),
-                (113, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
-                (136, y_baslangic - (i * satir_yuksekligi), "1"),
-                (148, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}"),
-                (170, y_baslangic - (i * satir_yuksekligi), "0.0%"),  # İskonto her zaman 0
-                (184, y_baslangic - (i * satir_yuksekligi), f"{islem['islem_tutari']:.2f}")
-            ])
-
-        # Cari ad unvanını 7 kelimede bir veya nokta ile biten kelimeden sonra yeni satıra böl
-        cari_ad_unvan = cari_bilgi.get('cari_ad_unvan', '')
-        words = cari_ad_unvan.split()
-        cari_ad_unvan_lines = []
-        line_words = []
-
-        for word in words:
-            line_words.append(word)
-            # Satırı bitirme koşulu: 7 kelime olduysa
-            if len(line_words) == 7:
-                cari_ad_unvan_lines.append(' '.join(line_words))
-                line_words = []
-
-        # Kalan kelimeler varsa ekle
-        if line_words:
-            cari_ad_unvan_lines.append(' '.join(line_words))
-
-        # Her satırı PDF'e ekle (cari adı için font boyutu 7)
-        for i, line in enumerate(cari_ad_unvan_lines):
-            eklemeler['text'].append((45, 250 - (i * 5), line, 7))
-
-        # PDF için eklemeler sözlüğünü oluştur
-        eklemeler = {
-            'text': [
-                # Servis ve Cari Bilgileri
-                (159, 260, is_emri_no, 9),  # İş emri numarası
-                (90, 260, self.plaka.text(), 9),  # Plaka
-                (50, 237, cari_bilgi.get('cep_telefonu', ''), 9),  # Telefon
-                (50, 232, vergi_no, 9),  # Vergi no
-                (50, 223, arac_bilgi.get('arac_tipi', ''), 9),  # Araç tipi
-                (50, 218, f"{arac_bilgi.get('marka', '')} {arac_bilgi.get('model', '')}", 9),  # Marka model
-                (50, 211, str(arac_bilgi.get('model_yili', '')), 9),  # Model yılı
-                (120, 223, arac_bilgi.get('sasi_no', ''), 9),  # Şasi no
-                (120, 218, arac_bilgi.get('motor_no', ''), 9),  # Motor no
-                (120, 211, servis_bilgi.get('servis_tarihi', ''), 9),  # Servis tarihi
-                (58, 204, servis_bilgi.get('servis_tarihi', ''), 9),  # Tarih
-                (58, 191, servis_bilgi.get('servis_tarihi', ''), 9),  # Tarih
-
-                # Tutar Bilgileri
-                (175, 68, f"₺ {kdv_haric_toplam:,.2f} TL", 9),
-                (175, 63, f"₺ {kdv_tutari:,.2f} TL", 9),
-                (175, 58, f"₺ {toplam_tutar:,.2f} TL", 9)
-            ]
-        }
-
-        # İşlemleri eklemeler listesine ekle
-        eklemeler['text'].extend(islem_texts)
-
-        # PDF'i oluştur
-        from pdf_oluşturucu import mevcut_pdf_duzenle
-        mevcut_pdf_duzenle("classiccar.pdf", dosya_yolu, eklemeler, font_size=10)  # Font boyutunu 6'dan 10'a çıkardım
-        QMessageBox.information(self, "Başarılı", "PDF başarıyla oluşturuldu.")
+        from pdf_aktar import servis_pdf_aktar
+        servis_pdf_aktar(self, servis_id, varsayilan="is_emri")
 
 class BilgilendirmePenceresi(QDialog):
     def __init__(self, parent=None):

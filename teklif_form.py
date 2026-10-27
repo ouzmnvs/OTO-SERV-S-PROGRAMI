@@ -10,7 +10,7 @@ from car_select_list import CarSelectListForm
 from database_progress import add_teklif_islem, delete_teklif_islem, update_teklif_tutar, get_teklif_details, delete_teklif
 from datetime import datetime
 import sqlite3
-from pdf_oluşturucu import mevcut_pdf_duzenle
+from sayi import sayi_oku
 
 class TeklifForm(QDialog):
     def __init__(self, dashboard_ref=None, teklif_id=None, teklif_no=None):
@@ -473,9 +473,9 @@ class TeklifForm(QDialog):
             return
 
         try:
-            # KDV oranını ve birim fiyatı float'a dönüştür
-            kdv_orani = float(kdv_orani)
-            birim_fiyat_float = float(birim_fiyat)  # Birim fiyat
+            # KDV oranını ve birim fiyatı sayıya dönüştür ("1500,50" ve "1.500,50" yazımları da kabul edilir)
+            kdv_orani = sayi_oku(kdv_orani)
+            birim_fiyat_float = sayi_oku(birim_fiyat)  # Birim fiyat
             islem_tutari_float = birim_fiyat_float * miktar  # Toplam tutar = birim fiyat * miktar
             kdv_tutari = islem_tutari_float * kdv_orani / 100  # KDV tutarı = toplam tutar * KDV oranı
 
@@ -716,17 +716,17 @@ class TeklifForm(QDialog):
                 miktar = islem.get('miktar', 1)
                 self.islem_table.setItem(row_count, 1, QTableWidgetItem(str(miktar)))
                 
-                # İşlem tutarı
-                self.islem_table.setItem(row_count, 2, QTableWidgetItem(f"{islem['islem_tutari']:.2f}"))
-                
+                # İşlem tutarı (eski kayıtlarda boş/NULL alanlar olabilir)
+                self.islem_table.setItem(row_count, 2, QTableWidgetItem(f"{islem['islem_tutari'] or 0:.2f}"))
+
                 # KDV oranı
-                self.islem_table.setItem(row_count, 3, QTableWidgetItem(f"{islem['kdv_orani']:.2f}"))
-                
+                self.islem_table.setItem(row_count, 3, QTableWidgetItem(f"{islem['kdv_orani'] or 0:.2f}"))
+
                 # KDV tutarı
-                self.islem_table.setItem(row_count, 4, QTableWidgetItem(f"{islem['kdv_tutari']:.2f}"))
-                
+                self.islem_table.setItem(row_count, 4, QTableWidgetItem(f"{islem['kdv_tutari'] or 0:.2f}"))
+
                 # Açıklama
-                self.islem_table.setItem(row_count, 5, QTableWidgetItem(islem['aciklama']))
+                self.islem_table.setItem(row_count, 5, QTableWidgetItem(islem['aciklama'] or ""))
 
             # İşlem özetini güncelle
             self.guncelle_islem_ozeti()
@@ -736,88 +736,8 @@ class TeklifForm(QDialog):
 
     def pdf_aktar(self):
         try:
-            # Teklif detaylarını al
-            teklif_details = get_teklif_details(self.teklif_no_input.text())
-            if not teklif_details:
-                QMessageBox.warning(self, "Uyarı", "Teklif detayları bulunamadı!")
-                return
-
-            # Teklif, cari ve araç bilgilerini al
-            teklif = teklif_details["teklif"]
-            cari = teklif_details["cari"]
-            arac = teklif_details["arac"]
-            islemler = teklif_details["islemler"]
-
-            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)  # KDV hariç toplam = işlemlerin toplamı
-            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
-            genel_toplam = toplam_kdv_haric + kdv_tutari_genel  # Genel toplam = KDV hariç toplam + KDV tutarı
-            # İşlemleri PDF için hazırla
-            islem_texts = []
-            y_baslangic = 119.5  # İlk işlem satırının Y koordinatı
-            satir_yuksekligi = 3.5  # Her işlem satırı arasındaki Y mesafesi
-
-            for i, islem in enumerate(islemler, 1):
-                islem_texts.extend([
-                    # Sıra No
-                    (7.5, y_baslangic - (i - 1) * satir_yuksekligi, str(i)),
-                    # İşlem Açıklaması
-                    (29.5, y_baslangic - (i - 1) * satir_yuksekligi, islem["islem_aciklama"]),
-                    # Miktar
-                    (77.5, y_baslangic - (i - 1) * satir_yuksekligi, str(islem.get('miktar', 1))),
-                    # Birimi
-                    (87.5, y_baslangic - (i - 1) * satir_yuksekligi, "ADET"),
-                    # Birim Fiyat
-                    (96.5, y_baslangic - (i - 1) * satir_yuksekligi, f"{islem['islem_tutari'] / islem.get('miktar', 1):,.2f}"),
-                    # İsk.%
-                    (112, y_baslangic - (i - 1) * satir_yuksekligi, "0.0%"),
-                    # Toplam Fiyat
-                    (120, y_baslangic - (i - 1) * satir_yuksekligi, f"{islem['islem_tutari']:,.2f}")
-                ])
-
-            # PDF için eklemeler sözlüğünü oluştur
-            eklemeler = {
-                'text': [
-                    # 🔴 Teklif No & Plaka (PDF sağ üst tarafı)
-                    (115, 160.8, str(teklif["teklif_no"])),  # Teklif No
-                    (39, 145, f"{teklif['plaka']}"),  # Plaka
-
-                    # 🔵 Cari Bilgileri
-                    (39, 155.5, f"{cari['cari_ad_unvan']}"),
-                    (39, 142, f"{cari['cep_telefonu']}"),
-
-                    # 🟣 Tarihler
-                    (110, 164, f"{teklif['teklif_tarihi']}"),
-                    (96.8, 157.5, f"Teklif Geçerlilik: {teklif['gecerlilik_tarihi']}"),
-
-                    # 🧾 Tutar Bilgileri (Sağ alt)
-                    (116, 51.5, f"{toplam_kdv_haric:,.2f} TL"),  # KDV Hariç Toplam
-                    (116, 49, f"{0:,.2f} TL"),  # İndirimli Tutar (Sabit 0)
-                    (116, 46.3, f"{toplam_kdv_haric:,.2f} TL"),  # İndirimli Ara Toplam (KDV Hariç Toplam ile aynı)
-                    (116, 43.9, f"{kdv_tutari_genel:,.2f} TL"),  # KDV Tutarı (İşlemlerin KDV tutarları toplamı)
-                    (116, 40.8, f"{genel_toplam:,.2f} TL")  # Genel Toplam
-                ]
-            }
-
-            # İşlemleri eklemeler listesine ekle
-            eklemeler['text'].extend(islem_texts)
-
-            # Dosya kaydetme dialogunu göster
-            default_filename = f"teklif_{teklif['teklif_no']}_{teklif['teklif_tarihi']}.pdf"
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "PDF'i Kaydet",
-                default_filename,
-                "PDF Dosyaları (*.pdf)"
-            )
-
-            if file_path:  # Eğer kullanıcı bir dosya yolu seçtiyse
-                # PDF'i oluştur
-                mevcut_pdf_duzenle("teklif.pdf", file_path, eklemeler, font_size=6)
-                QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
-            else:
-                QMessageBox.information(self, "İptal", "PDF oluşturma işlemi iptal edildi.")
-
+            from pdf_aktar import teklif_pdf_aktar
+            teklif_pdf_aktar(self, self.teklif_no_input.text())
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu: {str(e)}")
 

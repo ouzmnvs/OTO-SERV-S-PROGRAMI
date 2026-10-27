@@ -2,7 +2,33 @@ import os
 import shutil
 import datetime
 import json
+import pathlib
+import sqlite3
 from PyQt5.QtWidgets import QMessageBox
+
+
+def veritabani_dosyasi_gecerli(yol):
+    """
+    Dosyanın geri yüklenebilecek bir OTO SERVİS veritabanı olup olmadığını, dosyayı değiştirmeden
+    (salt okunur) kontrol eder. (geçerli_mi, açıklama) döndürür.
+    """
+    try:
+        if os.path.getsize(yol) == 0:
+            return False, "Dosya boş (0 bayt)."
+        conn = sqlite3.connect(pathlib.Path(yol).absolute().as_uri() + "?mode=ro", uri=True)
+        try:
+            tablolar = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            durum = conn.execute("PRAGMA quick_check").fetchone()[0]
+        finally:
+            conn.close()
+    except (sqlite3.Error, OSError) as e:
+        return False, f"Dosya bir veritabanı olarak açılamadı ({e})."
+    if durum != "ok":
+        return False, f"Veritabanı dosyası bozuk ({durum})."
+    eksik = {"cariler", "araclar", "servisler", "islemler"} - tablolar
+    if eksik:
+        return False, f"Bu dosya bir OTO SERVİS veritabanı değil (eksik tablolar: {', '.join(sorted(eksik))})."
+    return True, "Geçerli"
 
 class BackupManager:
     def __init__(self):
@@ -53,7 +79,7 @@ class BackupManager:
                 source_photos_dir = os.path.join(os.path.dirname(source_db), "ruhsat_fotograflari")
                 if os.path.exists(source_photos_dir):
                     backup_photos_dir = os.path.join(self.backup_path, f"ruhsat_fotograflari_{timestamp}")
-                    shutil.copytree(source_photos_dir, backup_photos_dir)
+                    self.fotograflari_yedekle(source_photos_dir, backup_photos_dir)
                     print(f"Ruhsat fotoğrafları yedeği alındı: {backup_photos_dir}")
                 
                 # Eski yedekleri temizle
@@ -67,6 +93,38 @@ class BackupManager:
             print(f"Yedekleme hatası: {str(e)}")
             return False
 
+    def fotograflari_yedekle(self, kaynak, hedef):
+        """
+        Ruhsat fotoğraflarını yedekler. Önceki yedekte aynı (ad, boyut, değişiklik zamanı) olan dosyalar
+        yeniden kopyalanmaz, sabit bağlantı (hard link) ile eklenir: her kapanışta tüm fotoğrafları kopyalamak
+        eski bilgisayarlarda yavaştı ve her yedek diskte ayrı yer kaplıyordu. Yedek klasörü yine tam bir kopya
+        gibi görünür ve geri yüklenir. Bağlantı desteklenmezse (ör. FAT32 USB bellek) dosya kopyalanır.
+        """
+        onceki_yedekler = sorted(
+            os.path.join(self.backup_path, ad) for ad in os.listdir(self.backup_path)
+            if ad.startswith("ruhsat_fotograflari_") and os.path.isdir(os.path.join(self.backup_path, ad))
+            and os.path.join(self.backup_path, ad) != hedef
+        )
+        onceki = onceki_yedekler[-1] if onceki_yedekler else None  # Adlar tarih sırasıyla sıralanır
+        for klasor, _, dosyalar in os.walk(kaynak):
+            goreli = os.path.relpath(klasor, kaynak)
+            hedef_klasor = os.path.normpath(os.path.join(hedef, goreli))
+            os.makedirs(hedef_klasor, exist_ok=True)
+            for ad in dosyalar:
+                kaynak_dosya = os.path.join(klasor, ad)
+                hedef_dosya = os.path.join(hedef_klasor, ad)
+                if onceki:
+                    eski_dosya = os.path.normpath(os.path.join(onceki, goreli, ad))
+                    try:
+                        yeni_bilgi, eski_bilgi = os.stat(kaynak_dosya), os.stat(eski_dosya)
+                        if (yeni_bilgi.st_size == eski_bilgi.st_size
+                                and int(yeni_bilgi.st_mtime) == int(eski_bilgi.st_mtime)):
+                            os.link(eski_dosya, hedef_dosya)
+                            continue
+                    except OSError:
+                        pass  # Önceki yedekte yok, değişmiş ya da disk bağlantıyı desteklemiyor
+                shutil.copy2(kaynak_dosya, hedef_dosya)
+
     def cleanup_old_backups(self):
         """Eski yedekleri temizler"""
         try:
@@ -77,8 +135,9 @@ class BackupManager:
                     file_path = os.path.join(self.backup_path, file)
                     backup_files.append((file_path, os.path.getmtime(file_path)))
 
-            # Dosyaları tarihe göre sırala (en yeniden en eskiye)
-            backup_files.sort(key=lambda x: x[1], reverse=True)
+            # Dosyaları tarihe göre sırala (en yeniden en eskiye). Yedek, veritabanının değişiklik zamanını
+            # koruduğu için zamanlar eşit olabilir; eşitlikte adındaki tarih-saat belirler.
+            backup_files.sort(key=lambda x: (x[1], x[0]), reverse=True)
 
             # Maksimum yedek sayısından fazla olanları sil
             if len(backup_files) > self.max_backups:
@@ -105,7 +164,7 @@ class BackupManager:
                         photo_dirs.append((dir_path, os.path.getmtime(dir_path)))
 
             # Fotoğraf klasörlerini tarihe göre sırala
-            photo_dirs.sort(key=lambda x: x[1], reverse=True)
+            photo_dirs.sort(key=lambda x: (x[1], x[0]), reverse=True)
 
             # Maksimum sayıdan fazla olan fotoğraf klasörlerini sil
             if len(photo_dirs) > self.max_backups:
@@ -166,12 +225,16 @@ class BackupManager:
                     return False, "Yedek bulunamadı!"
                 
                 # En son yedeği al
-                backup_files.sort(key=lambda x: x[1], reverse=True)
+                backup_files.sort(key=lambda x: (x[1], x[0]), reverse=True)  # Eşit zamanda adındaki tarih-saat belirler
                 backup_path = backup_files[0][0]
             else:
                 backup_path = os.path.join(self.backup_path, backup_filename)
                 if not os.path.exists(backup_path):
                     return False, "Belirtilen yedek bulunamadı!"
+
+            gecerli, aciklama = veritabani_dosyasi_gecerli(backup_path)
+            if not gecerli:
+                return False, f"En son yedek geri yüklenmedi ({os.path.basename(backup_path)}): {aciklama}"
 
             # Mevcut veritabanını yedekle
             current_db = "oto_servis.db"
@@ -252,8 +315,16 @@ class BackupManager:
             if not os.path.exists(file_path):
                 return False, "Belirtilen dosya bulunamadı!"
 
-            # Mevcut veritabanını yedekle (acil durum yedeği)
             current_db = "oto_servis.db"
+            if os.path.exists(current_db) and os.path.samefile(file_path, current_db):
+                return False, "Seçilen dosya zaten programın kullandığı veritabanı."
+
+            # Seçilen dosya kontrol edilmeden mevcut veritabanının üzerine yazılmaz
+            gecerli, aciklama = veritabani_dosyasi_gecerli(file_path)
+            if not gecerli:
+                return False, f"Seçilen dosya geri yüklenmedi, mevcut veritabanı değiştirilmedi.\n\n{aciklama}"
+
+            # Mevcut veritabanını yedekle (acil durum yedeği)
             if os.path.exists(current_db):
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 emergency_backup = f"emergency_backup_{timestamp}.db"

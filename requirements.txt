@@ -1,8 +1,10 @@
 PyQt5==5.15.9
 qtawesome==1.2.3
-pyinstaller==6.3.0
+pyinstaller==6.22.3
 setuptools==68.2.2
 wheel==0.41.2
-pyinstaller-hooks-contrib==2023.10
+pyinstaller-hooks-contrib==2026.9
 reportlab==4.0.4
 PyMuPDF==1.23.7
+fonttools==4.67.0
+pillow==13.0.0

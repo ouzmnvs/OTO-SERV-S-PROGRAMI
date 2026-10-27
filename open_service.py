@@ -1,10 +1,13 @@
 from PyQt5.QtWidgets import (
-  QDesktopWidget, QDialog, QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDialog, QFileDialog, QMessageBox
+  QDesktopWidget, QDialog, QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox, QDialog, QFileDialog, QMessageBox,
+  QInputDialog
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIntValidator
 from qtawesome import icon
 import sys
-from database_progress import load_open_services
+from database_progress import load_open_services_with_totals as load_open_services
+from arama import eslesir
 from service_update import ServiceUpdateForm  # En üste ekleyin
 from database_progress import close_service
 from servis_form import ServisForm  # <-- Doğru dosya adıyla import
@@ -46,7 +49,7 @@ class OpenServiceForm(QWidget):
         
         self.init_ui()
         # Initially load all open services
-        self.load_open_services_to_table(load_open_services())
+        self.filtrele_servisler()
         self.setWindowIcon(icon('fa5s.file')) # Add a file icon
     def init_ui(self):
         # Ana layout
@@ -119,6 +122,8 @@ class OpenServiceForm(QWidget):
         # Connect filter buttons
         btn_filtrele.clicked.connect(self.filtrele_servisler)
         btn_temizle.clicked.connect(self.filtreyi_temizle)
+        self.filtre_input.returnPressed.connect(self.filtrele_servisler)
+        self.filtre_input.textChanged.connect(self.filtrele_servisler)
 
         ana_layout.addLayout(filtre_layout)
 
@@ -179,19 +184,13 @@ class OpenServiceForm(QWidget):
 
     def load_open_services_to_table(self, services):
         """Açık servisleri tabloya yükler ve alt bilgiyi günceller."""
+        self.table.setUpdatesEnabled(False)
         self.table.setRowCount(len(services))
         toplam_tutar = 0.0
 
-        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi) in enumerate(services):
-            # Servis detaylarını al
-            details = get_service_full_details(servis_id)
-            if details and details.get("islemler"):
-                # İşlem tutarı ve KDV tutarını hesapla
-                islem_tutari = sum(islem['islem_tutari'] for islem in details["islemler"])
-                kdv_tutari = sum(islem['kdv_tutari'] for islem in details["islemler"])
-                toplam_tutar_hesaplanan = islem_tutari + kdv_tutari
-            else:
-                toplam_tutar_hesaplanan = tutar  # Eğer detaylar alınamazsa mevcut tutarı kullan
+        # Tutar, işlemlerden (KDV dahil) tek sorguda hesaplanmış olarak gelir
+        for row, (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi, _telefon) in enumerate(services):
+            toplam_tutar_hesaplanan = tutar or 0.0
 
             self.table.setItem(row, 0, QTableWidgetItem(str(servis_id)))
             self.table.setItem(row, 1, QTableWidgetItem(cari_kodu))
@@ -202,6 +201,7 @@ class OpenServiceForm(QWidget):
             self.table.setItem(row, 6, QTableWidgetItem(arac_getiren_kisi or ""))
             self.table.setItem(row, 7, QTableWidgetItem(durum))
             toplam_tutar += toplam_tutar_hesaplanan
+        self.table.setUpdatesEnabled(True)
 
         # Alt bilgiyi güncelle
         alt_bilgi_font_size = int(self.screen_height * 0.011)
@@ -213,35 +213,16 @@ class OpenServiceForm(QWidget):
         """)
 
     def filtrele_servisler(self):
-        """Input alanındaki metne göre servisleri filtreler."""
-        filter_text = self.filtre_input.text().lower()
-        all_services = load_open_services() # Get all services
-
-        if not filter_text:
-            self.load_open_services_to_table(all_services) # If no filter, show all
-            return
-
-        filtered_services = []
-        for service in all_services:
-            # service is (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi)
-            cari_kodu = str(service[1]).lower()
-            cari_unvan = str(service[2]).lower()
-            plaka = str(service[3]).lower()
-            # We need phone number for filtering, but it's not in load_open_services return
-            # Assuming phone number is not strictly required for now, or we'd need to join with cariler table in load_open_services
-            # For now, filtering only by cari_kodu, cari_unvan, plaka
-            if filter_text in cari_kodu or filter_text in cari_unvan or filter_text in plaka:
-                 filtered_services.append(service)
-            # To add phone number filtering, load_open_services would need to return it, e.g.:
-            # load_open_services() -> (..., c.cep_telefonu)
-            # Then filter_text in str(service[X]).lower() where X is the phone index
-
-        self.load_open_services_to_table(filtered_services)
+        """Arama metnine (servis no, cari kodu/adı, plaka, telefon, aracı getiren) göre servisleri listeler."""
+        filter_text = self.filtre_input.text()
+        # (servis_id, cari_kodu, cari_unvan, plaka, tarih, tutar, durum, arac_getiren_kisi, telefon)
+        services = [s for s in load_open_services() if eslesir(filter_text, s[0], s[1], s[2], s[3], s[7], s[8])]
+        self.load_open_services_to_table(services)
 
     def filtreyi_temizle(self):
         """Filtre input alanını temizler ve tüm servisleri listeler."""
         self.filtre_input.clear()
-        self.load_open_services_to_table(load_open_services()) # Load all services again
+        self.filtrele_servisler() # Load all services again
 
     def kaydi_duzenle(self):
         selected_row = self.table.currentRow()
@@ -260,7 +241,7 @@ class OpenServiceForm(QWidget):
         self.servis_update_form.set_service_details(details)
         result = self.servis_update_form.exec_()
         if result == QDialog.Accepted:
-            self.load_open_services_to_table(load_open_services()) # Update table after edit
+            self.filtrele_servisler() # Update table after edit
 
     def servisi_kapat(self):
         selected_row = self.table.currentRow()
@@ -280,19 +261,57 @@ class OpenServiceForm(QWidget):
         # Toplam tutarı al
         toplam_tutar = details["servis"]["servis_tutar"]
 
+        # Araç çıkış km'sini sor (boş bırakılabilir, iptal edilirse servis kapatılmaz)
+        cikis_km = self.cikis_km_sor(details["servis"])
+        if cikis_km is False:
+            return
+
         # Servisi kapat ve kapanış tutarını güncelle
-        close_service(servis_id, toplam_tutar)
+        close_service(servis_id, toplam_tutar, cikis_km)
 
         # Tabloyu güncelle
-        self.load_open_services_to_table(load_open_services())
+        self.filtrele_servisler()
 
         QMessageBox.information(self, "Başarılı", "Servis başarıyla kapatıldı!")
+
+    def cikis_km_sor(self, servis):
+        """Çıkış km'sini sorar. Sayı veya boşsa None döndürür; iptal edilirse False."""
+        giris_km = servis.get("giris_km")
+        mevcut = servis.get("cikis_km")
+        while True:
+            dialog = QInputDialog(self)
+            dialog.setWindowTitle("Servisi Kapat")
+            etiket = "Aracın çıkış km'sini giriniz (boş bırakabilirsiniz):"
+            if giris_km is not None:
+                etiket += f"\nGiriş KM: {giris_km:,}".replace(",", ".")
+            dialog.setLabelText(etiket)
+            dialog.setTextValue(str(mevcut) if mevcut is not None else "")
+            dialog.setOkButtonText("Servisi Kapat")
+            dialog.setCancelButtonText("İptal")
+            alan = dialog.findChild(QLineEdit)
+            if alan:
+                alan.setValidator(QIntValidator(0, 9999999, dialog))
+            if dialog.exec_() != QDialog.Accepted:
+                return False
+            metin = dialog.textValue().strip()
+            if not metin:
+                return None
+            try:
+                cikis_km = int(metin)
+            except ValueError:
+                QMessageBox.warning(self, "Uyarı", "Çıkış KM geçerli bir sayı olmalıdır!")
+                continue
+            if giris_km is not None and cikis_km < giris_km:
+                QMessageBox.warning(self, "Uyarı", "Çıkış KM, giriş KM'den küçük olamaz!")
+                mevcut = cikis_km
+                continue
+            return cikis_km
 
     def yeni_servis_girisi(self):
         self.servis_form = ServisForm()
         result = self.servis_form.exec_()  # Modal olarak aç
         if result == QDialog.Accepted:
-            self.load_open_services_to_table(load_open_services())  # Yeni servis eklendiyse tabloyu güncelle
+            self.filtrele_servisler()  # Yeni servis eklendiyse tabloyu güncelle
 
     def kaydi_sil(self):
         selected_row = self.table.currentRow()
@@ -305,7 +324,7 @@ class OpenServiceForm(QWidget):
         yanit = QMessageBox.question(self, "Onay", "Seçili servisi silmek istediğinize emin misiniz?", QMessageBox.Yes | QMessageBox.No)
         if yanit == QMessageBox.Yes:
             delete_service(servis_id)
-            self.load_open_services_to_table(load_open_services())
+            self.filtrele_servisler()
             QMessageBox.information(self, "Başarılı", "Servis kaydı silindi.")
 
     def odeme_al(self):
@@ -319,109 +338,9 @@ class OpenServiceForm(QWidget):
             return
 
         try:
-            # Get service ID from the table's UserRole data
-            servis_id = self.table.item(selected_row, 0).data(Qt.UserRole)
-            if not servis_id:
-                servis_id = self.table.item(selected_row, 0).text()
-            
-            details = get_service_full_details(servis_id)
-            if not details:
-                QMessageBox.warning(self, "Uyarı", "Servis detayları bulunamadı!")
-                return
-
-            # Get service, customer and vehicle information
-            servis = details["servis"]
-            cari = details["cari"]
-            arac = details["arac"]
-            islemler = details["islemler"]
-
-            # Format service number to 6 digits
-            is_emri_no = f"{int(servis['id']):06d}"
-            
-            # Toplam tutarları ve KDV'yi işlemlere göre hesapla
-            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)  # KDV hariç toplam = işlemlerin toplamı
-            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
-            genel_toplam = toplam_kdv_haric + kdv_tutari_genel  # Genel toplam = KDV hariç toplam + KDV tutarı
-
-            # İşlemleri PDF için hazırla
-            islem_texts = []
-            y_start = 152.5
-            line_height = 3.7
-
-            # İşlemleri sırayla işle (benzersizlik kontrolünü kaldır)
-            for i, islem in enumerate(islemler, 1):
-                islem_texts.extend([
-                    (10, y_start - (i * line_height), str(i)),
-                    (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
-                    (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat
-                    (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar
-                    (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
-                    (170, y_start - (i * line_height), f"0.0%"),  # KDV oranı
-                    (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
-                ])
-
-            # Check tax number
-            vergi_no = cari.get('vergi_no', '')
-            if vergi_no is None:
-                vergi_no = ''
-
-            # Create additions dictionary for PDF
-            eklemeler = {
-                'text': [
-                    (159, 260, is_emri_no),
-                    (90, 259.6, f"{servis['plaka']}"),
-                ]
-            }
-
-            # Split customer name into lines
-            cari_ad_unvan = cari.get('cari_ad_unvan', '')
-            cari_ad_unvan_lines = self.split_cari_ad_unvan(cari_ad_unvan)
-
-            # Add each line to PDF (font size 7.5 for customer name)
-            for i, line in enumerate(cari_ad_unvan_lines):
-                eklemeler['text'].append((45, 250 - (i * 5), line, 8))
-
-            # Add other information (font 9)
-            eklemeler['text'].extend([
-                (50, 237, f"{cari.get('cep_telefonu', '')}", 9),
-                (50, 232, f"{vergi_no}", 9),
-                (50, 223, f"{arac.get('arac_tipi', '')}", 9),
-                (50, 218, f"{arac.get('marka', '')} {arac.get('model', '')}", 9),
-                (50, 211, f"{arac.get('model_yili', '')}", 9),
-                (120, 223, f"{arac.get('sasi_no', '')}", 9),
-                (120, 218, f"{arac.get('motor_no', '')}", 9),
-                (58, 204.5, f"{servis['servis_tarihi']}", 9),
-                (58, 191.5, f"{servis['servis_tarihi']}", 9),
-                (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{toplam_kdv_haric} TL", 9),
-                (175, 63, f"{kdv_tutari_genel} TL", 9),
-                (175, 58, f"{genel_toplam} TL", 9)
-            ])
-
-            # Add operations to additions list (font 9)
-            for item in islem_texts:
-                if len(item) == 3:
-                    eklemeler['text'].append((*item, 7.5))
-                else:
-                    eklemeler['text'].append(item)
-
-            # Show save file dialog
-            default_filename = f"servis_{is_emri_no}_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "PDF Dosyasını Kaydet",
-                default_filename,
-                "PDF Dosyaları (*.pdf)"
-            )
-
-            if file_path:
-                # Create PDF
-                from pdf_oluşturucu import mevcut_pdf_duzenle
-                mevcut_pdf_duzenle("classiccar.pdf", file_path, eklemeler, font_size=10)
-                QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
-            else:
-                QMessageBox.information(self, "Bilgi", "PDF oluşturma işlemi iptal edildi.")
-
+            servis_id = self.table.item(selected_row, 0).text()
+            from pdf_aktar import servis_pdf_aktar
+            servis_pdf_aktar(self, servis_id, varsayilan="is_emri")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 

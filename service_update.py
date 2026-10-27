@@ -4,16 +4,11 @@ from PyQt5.QtWidgets import (
    QDesktopWidget, QSizePolicy, QFrame, QMessageBox, QFileDialog, QTextEdit
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIntValidator
 from qtawesome import icon
 import sys
-from database_progress import add_islem, load_service_operations, delete_service, update_servis
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase import pdfmetrics
-import os
-import datetime
-from pdf_oluşturucu import mevcut_pdf_duzenle
+from database_progress import delete_service, update_servis_ve_islemler
+from sayi import sayi_oku
 
 class ServiceUpdateForm(QDialog):
     def __init__(self):
@@ -164,13 +159,26 @@ class ServiceUpdateForm(QDialog):
         self.txt_arac_getiren.setStyleSheet(input_style)
         bilgi_layout.addWidget(self.txt_arac_getiren, 9, 1, 1, 2)
 
+        # Giriş / Çıkış KM
+        bilgi_layout.addWidget(self._label("Giriş KM", label_style), 10, 0)
+        self.txt_giris_km = QLineEdit()
+        self.txt_giris_km.setStyleSheet(input_style)
+        self.txt_giris_km.setValidator(QIntValidator(0, 9999999, self))
+        bilgi_layout.addWidget(self.txt_giris_km, 10, 1)
+
+        bilgi_layout.addWidget(self._label("Çıkış KM", label_style), 11, 0)
+        self.txt_cikis_km = QLineEdit()
+        self.txt_cikis_km.setStyleSheet(input_style)
+        self.txt_cikis_km.setValidator(QIntValidator(0, 9999999, self))
+        bilgi_layout.addWidget(self.txt_cikis_km, 11, 1)
+
         # Açıklama alanı
-        bilgi_layout.addWidget(self._label("Müşteri Talepleri ve Açıklama", label_style), 10, 0)
+        bilgi_layout.addWidget(self._label("Müşteri Talepleri ve Açıklama", label_style), 12, 0)
         self.txt_aciklama = QTextEdit()
         self.txt_aciklama.setStyleSheet(input_style)
         self.txt_aciklama.setMinimumHeight(100)
         self.txt_aciklama.setPlaceholderText("Müşteri talepleri ve servis açıklamasını buraya yazınız...")
-        bilgi_layout.addWidget(self.txt_aciklama, 10, 1, 1, 2)
+        bilgi_layout.addWidget(self.txt_aciklama, 12, 1, 1, 2)
 
         bilgi_group.setLayout(bilgi_layout)
         sol_panel.addWidget(bilgi_group)
@@ -332,9 +340,9 @@ class ServiceUpdateForm(QDialog):
         self.setLayout(ana_layout)
 
         # Input alanlarına size policy ekle
-        for widget in [self.txt_cari_kodu, self.txt_cari_unvan, self.txt_telefon, 
-                      self.txt_plaka, self.txt_model_yili, self.txt_marka, 
-                      self.txt_model, self.txt_arac_getiren]:
+        for widget in [self.txt_cari_kodu, self.txt_cari_unvan, self.txt_telefon,
+                      self.txt_plaka, self.txt_model_yili, self.txt_marka,
+                      self.txt_model, self.txt_arac_getiren, self.txt_giris_km, self.txt_cikis_km]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             widget.setMinimumWidth(200)
 
@@ -384,18 +392,23 @@ class ServiceUpdateForm(QDialog):
         self.txt_model.setText(details["arac"].get("model", ""))
         self.txt_model.setReadOnly(True)
         self.txt_arac_getiren.setText(details["servis"].get("arac_getiren_kisi", ""))
+        giris_km = details["servis"].get("giris_km")
+        cikis_km = details["servis"].get("cikis_km")
+        self.txt_giris_km.setText(str(giris_km) if giris_km is not None else "")
+        self.txt_cikis_km.setText(str(cikis_km) if cikis_km is not None else "")
         self.txt_aciklama.setText(details["servis"].get("aciklama", ""))
         
         # İşlemleri tabloya ekle
         self.tbl_islemler.setRowCount(len(details["islemler"]))
         self.existing_operations = []
         for row, islem in enumerate(details["islemler"]):
-            self.tbl_islemler.setItem(row, 0, QTableWidgetItem(islem["islem_aciklama"]))
-            self.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{islem['islem_tutari']:.2f}"))
-            self.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{islem['kdv_orani']:.2f}"))
-            self.tbl_islemler.setItem(row, 3, QTableWidgetItem(f"{islem['kdv_tutari']:.2f}"))
-            self.tbl_islemler.setItem(row, 4, QTableWidgetItem(str(islem["miktar"])))
-            self.tbl_islemler.setItem(row, 5, QTableWidgetItem(islem["aciklama"]))
+            # Eski kayıtlarda boş (NULL) alanlar olabilir
+            self.tbl_islemler.setItem(row, 0, QTableWidgetItem(islem["islem_aciklama"] or ""))
+            self.tbl_islemler.setItem(row, 1, QTableWidgetItem(f"{islem['islem_tutari'] or 0:.2f}"))
+            self.tbl_islemler.setItem(row, 2, QTableWidgetItem(f"{islem['kdv_orani'] or 0:.2f}"))
+            self.tbl_islemler.setItem(row, 3, QTableWidgetItem(f"{islem['kdv_tutari'] or 0:.2f}"))
+            self.tbl_islemler.setItem(row, 4, QTableWidgetItem(str(islem["miktar"] or 1)))
+            self.tbl_islemler.setItem(row, 5, QTableWidgetItem(islem["aciklama"] or ""))
             self.existing_operations.append((
                 islem["id"],
                 islem["islem_aciklama"],
@@ -465,24 +478,34 @@ class ServiceUpdateForm(QDialog):
             return
 
         try:
-            # Önce mevcut işlemleri sil
-            from database_progress import delete_islem_by_id
-            for islem in self.existing_operations:
-                delete_islem_by_id(islem[0])
-            self.existing_operations.clear()
+            giris_km = int(self.txt_giris_km.text()) if self.txt_giris_km.text().strip() else None
+            cikis_km = int(self.txt_cikis_km.text()) if self.txt_cikis_km.text().strip() else None
+        except ValueError:
+            QMessageBox.warning(self, "Uyarı", "Giriş ve çıkış KM geçerli bir sayı olmalıdır!")
+            return
+        if giris_km is not None and cikis_km is not None and cikis_km < giris_km:
+            QMessageBox.warning(self, "Uyarı", "Çıkış KM, giriş KM'den küçük olamaz!")
+            return
 
-            # Servis bilgilerini güncelle
-            update_servis(self.servis_id, cari_kodu, plaka, aciklama, arac_getiren_kisi)
-
-            # Yeni işlemleri ekle
+        try:
+            islemler = []
             for row in range(self.tbl_islemler.rowCount()):
-                islem_aciklama = self.tbl_islemler.item(row, 0).text()
-                islem_tutari = float(self.tbl_islemler.item(row, 1).text())
-                kdv_orani = float(self.tbl_islemler.item(row, 2).text())
-                kdv_tutari = float(self.tbl_islemler.item(row, 3).text())
-                miktar = int(self.tbl_islemler.item(row, 4).text())
-                aciklama = self.tbl_islemler.item(row, 5).text()
-                add_islem(self.servis_id, islem_aciklama, islem_tutari, kdv_orani, kdv_tutari, aciklama, miktar)
+                islemler.append((
+                    self.tbl_islemler.item(row, 0).text(),
+                    float(self.tbl_islemler.item(row, 1).text()),
+                    float(self.tbl_islemler.item(row, 2).text()),
+                    float(self.tbl_islemler.item(row, 3).text()),
+                    self.tbl_islemler.item(row, 5).text(),
+                    int(self.tbl_islemler.item(row, 4).text()),
+                ))
+
+            # Mevcut işlemleri silip tablodakileri yeniden ekler; hepsi tek seferde kaydedilir
+            update_servis_ve_islemler(
+                self.servis_id, cari_kodu, plaka, aciklama, arac_getiren_kisi,
+                [islem[0] for islem in self.existing_operations], islemler,
+                giris_km=giris_km, cikis_km=cikis_km
+            )
+            self.existing_operations.clear()
 
             QMessageBox.information(self, "Başarılı", "Servis başarıyla güncellendi.")
             self.accept()
@@ -495,104 +518,8 @@ class ServiceUpdateForm(QDialog):
             return
 
         try:
-            # Servis detaylarını al
-            from database_progress import get_service_full_details
-            detaylar = get_service_full_details(self.servis_id)
-            if not detaylar:
-                QMessageBox.warning(self, "Uyarı", "Servis detayları bulunamadı!")
-                return
-
-            # Servis, cari ve araç bilgilerini al
-            servis = detaylar["servis"]
-            cari = detaylar["cari"]
-            arac = detaylar["arac"]
-            islemler = detaylar["islemler"]
-
-            toplam_kdv_haric = sum(islem['islem_tutari'] for islem in islemler)  # KDV hariç toplam = işlemlerin toplamı
-            kdv_tutari_genel = sum(islem['kdv_tutari'] for islem in islemler)  # Tüm işlemlerin KDV toplamı
-            genel_toplam = toplam_kdv_haric + kdv_tutari_genel  # Genel toplam = KDV hariç toplam + KDV tutarı
-
-            # İş emri numarasını 6 haneli formatta hazırla
-            is_emri_no = f"{int(servis['id']):06d}"
-
-            # İşlemleri PDF için hazırla
-            islem_texts = []
-            y_start = 152.5
-            line_height = 3.7
-
-            # İşlemleri sırayla işle
-            for i, islem in enumerate(islemler, 1):
-                islem_texts.extend([
-                    (10, y_start - (i * line_height), str(i)),
-                    (30, y_start - (i * line_height), f"{islem['islem_aciklama']} {islem['aciklama']}"),
-                    (114.5, y_start - (i * line_height), f"{islem['islem_tutari'] / islem['miktar']:.2f}"),  # Birim fiyat
-                    (136, y_start - (i * line_height), str(islem['miktar'])),  # Miktar
-                    (148, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}"),  # Toplam tutar
-                    (170, y_start - (i * line_height), f"0.0%"),  # KDV oranı
-                    (184, y_start - (i * line_height), f"{islem['islem_tutari']:.2f}")  # Toplam tutar
-                ])
-
-            # Vergi numarası kontrolü
-            vergi_no = cari.get('vergi_no', '')
-            if vergi_no is None:
-                vergi_no = ''
-
-            # PDF için eklemeler sözlüğünü oluştur
-            eklemeler = {
-                'text': [
-                    (159, 260, is_emri_no),
-                    (90, 259.6, f"{servis['plaka']}"),
-                ]
-            }
-
-            # Cari ad unvanını bölme mantığı
-            cari_ad_unvan = cari.get('cari_ad_unvan', '')
-            cari_ad_unvan_lines = self.split_cari_ad_unvan(cari_ad_unvan)
-
-            # Her satırı PDF'e ekle (cari adı için font boyutu 8)
-            for i, line in enumerate(cari_ad_unvan_lines):
-                eklemeler['text'].append((45, 250 - (i * 5), line, 8))
-
-            # Diğer bilgileri ekle (font 9)
-            eklemeler['text'].extend([
-                (50, 237, f"{cari.get('cep_telefonu', '')}", 9),
-                (50, 232, f"{vergi_no}", 9),
-                (50, 223, f"{arac.get('arac_tipi', '')}", 9),
-                (50, 218, f"{arac.get('marka', '')} {arac.get('model', '')}", 9),
-                (50, 211, f"{arac.get('model_yili', '')}", 9),
-                (120, 223, f"{arac.get('sasi_no', '')}", 9),
-                (120, 218, f"{arac.get('motor_no', '')}", 9),
-                (58, 204.5, f"{servis['servis_tarihi']}", 9),
-                (58, 191.5, f"{servis['servis_tarihi']}", 9),
-                (25, 181, f"{servis.get('aciklama', '')}", 9),
-                (175, 68, f"{toplam_kdv_haric} TL", 9),
-                (175, 63, f"{kdv_tutari_genel} TL", 9),
-                (175, 58, f"{genel_toplam} TL", 9)
-            ])
-
-            # İşlemleri eklemeler listesine ekle (font 9)
-            for item in islem_texts:
-                if len(item) == 3:
-                    eklemeler['text'].append((*item, 7.5))
-                else:
-                    eklemeler['text'].append(item)
-
-            # Dosya kaydetme dialogunu göster
-            default_filename = f"servis_{is_emri_no}_{servis['plaka']}_{servis['servis_tarihi']}.pdf"
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "PDF Dosyasını Kaydet",
-                default_filename,
-                "PDF Dosyaları (*.pdf)"
-            )
-
-            if file_path:
-                # PDF'i oluştur
-                mevcut_pdf_duzenle("classiccar.pdf", file_path, eklemeler, font_size=10)
-                QMessageBox.information(self, "Başarılı", f"PDF dosyası oluşturuldu:\n{file_path}")
-            else:
-                QMessageBox.information(self, "Bilgi", "PDF oluşturma işlemi iptal edildi.")
-
+            from pdf_aktar import servis_pdf_aktar
+            servis_pdf_aktar(self, self.servis_id, varsayilan="is_emri")
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"PDF oluşturulurken bir hata oluştu:\n{str(e)}")
 
@@ -611,9 +538,9 @@ class ServiceUpdateForm(QDialog):
             return
 
         try:
-            # KDV oranını ve birim fiyatı float'a dönüştür
-            kdv_orani = float(kdv_orani)
-            birim_fiyat_float = float(birim_fiyat)  # Birim fiyat
+            # KDV oranını ve birim fiyatı sayıya dönüştür ("1500,50" ve "1.500,50" yazımları da kabul edilir)
+            kdv_orani = sayi_oku(kdv_orani)
+            birim_fiyat_float = sayi_oku(birim_fiyat)  # Birim fiyat
             islem_tutari_float = birim_fiyat_float * miktar  # Toplam tutar = birim fiyat * miktar
             kdv_tutari = islem_tutari_float * kdv_orani / 100  # KDV tutarı = toplam tutar * KDV oranı
 

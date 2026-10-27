@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_car_list
+from hizli_tablo import HizliTablo
 from add_car import AddCarForm  # En üste ekleyin
 from servis_kayitlari import ServisKayitlariForm
 from reportlab.lib.pagesizes import A4
@@ -90,13 +91,15 @@ class CarListForm(QDialog):
         """)
         btn_filtrele.clicked.connect(self.filtrele_araclar)
         btn_temizle.clicked.connect(self.filtreyi_temizle)
+        self.filtre_input.returnPressed.connect(self.filtrele_araclar)
+        self.filtre_input.textChanged.connect(self.filtrele_araclar)
         filtre_layout.addWidget(self.filtre_input)
         filtre_layout.addWidget(btn_filtrele)
         filtre_layout.addWidget(btn_temizle)
         ana_layout.addLayout(filtre_layout)
 
-        # Tablo
-        self.table = QTableWidget()
+        # Tablo (binlerce araçta da hızlı kalması için yalnızca görünen satırları çizer)
+        self.table = HizliTablo()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
             "Cari Kodu", "Cari Adı / Ünvanı", "Araç Plakası", "Araç Tipi", "Model Yılı", "Marka", "Model"
@@ -106,7 +109,7 @@ class CarListForm(QDialog):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet("""
-            QTableWidget {
+            QTableView {
                 font-size: 13px;
                 alternate-background-color: #f5f5f5;
                 background: #fff;
@@ -128,51 +131,32 @@ class CarListForm(QDialog):
         self.setLayout(ana_layout)
 
     def load_data_to_table(self, filter_query=None):
+        """Araçları veritabanından okur; arama kutusundaki (veya verilen) filtre yeniden uygulanır."""
         conn = None
         try:
             conn = sqlite3.connect("oto_servis.db")
             cursor = conn.cursor()
-            if filter_query:
-                # JOIN cariler tablosu ve filtreleme
-                cursor.execute("""
-                    SELECT
-                        a.cari_kodu, c.cari_ad_unvan, a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model
-                    FROM araclar a
-                    LEFT JOIN cariler c ON a.cari_kodu = c.cari_kodu
-                    WHERE
-                        a.cari_kodu LIKE ? OR
-                        c.cari_ad_unvan LIKE ? OR
-                        a.plaka LIKE ?
-                """, (f'%{filter_query}%', f'%{filter_query}%', f'%{filter_query}%'))
-                data = cursor.fetchall()
-            else:
-                # Tüm verileri yükle
-                cursor.execute("""
-                    SELECT
-                        a.cari_kodu, c.cari_ad_unvan, a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model
-                    FROM araclar a
-                    LEFT JOIN cariler c ON a.cari_kodu = c.cari_kodu
-                """)
-                data = cursor.fetchall()
-
-            self.table.setRowCount(len(data))
-            for row, record in enumerate(data):
-                for col, value in enumerate(record):
-                    self.table.setItem(row, col, QTableWidgetItem(str(value) if value is not None else ""))
+            cursor.execute("""
+                SELECT
+                    a.cari_kodu, c.cari_ad_unvan, a.plaka, a.arac_tipi, a.model_yili, a.marka, a.model
+                FROM araclar a
+                LEFT JOIN cariler c ON a.cari_kodu = c.cari_kodu
+            """)
+            self.table.kayitlari_yukle(cursor.fetchall(), hucreler=lambda kayit: kayit)
         except Exception as e:
             QMessageBox.critical(self, "Veritabanı Hatası", f"Araç listesi yüklenirken hata oluştu:\n{e}")
-            data = [] # Hata durumunda boş liste ata
         finally:
             if conn:
                 conn.close()
+        self.table.filtrele(self.filtre_input.text() if filter_query is None else filter_query)
 
     def filtrele_araclar(self):
-        filter_text = self.filtre_input.text().strip()
-        self.load_data_to_table(filter_text)
+        # Arama bellekteki liste üzerinde yapılır (Türkçe harf duyarsız); her tuşta veritabanı sorgulanmaz
+        self.table.filtrele(self.filtre_input.text())
 
     def filtreyi_temizle(self):
         self.filtre_input.clear()
-        self.load_data_to_table()
+        self.table.filtrele("")
 
     def stil_buton(self, text, icon_name, color):
         btn = QPushButton(icon(icon_name, color=color), text)
@@ -321,15 +305,10 @@ class CarListForm(QDialog):
 
     def pdf_aktar(self):
         try:
-            # Türkçe karakter desteği için font kaydı
-            font_path = os.path.join(os.path.dirname(__file__), "arial-unicode-ms.ttf")
-            try:
-                pdfmetrics.registerFont(TTFont("ArialUnicode", font_path))
-                font_name = "ArialUnicode"
-            except Exception as e:
-                print(f"Hata: Arial Unicode MS fontu yüklenemedi: {e}. Varsayılan font kullanılacak.")
-                font_name = "Helvetica" # Varsayılan font
-                QMessageBox.warning(self, "Uyarı", f"Arial Unicode MS fontu yüklenemedi ({e}). PDF'de Türkçe karakter sorunları yaşanabilir.")
+            # Türkçe karakterler (Ç, Ü, Ö, Ş, İ...) iş emri PDF'leriyle aynı, düzeltilmiş fontla yazılır
+            from pdf_belgeler import turkce_fontlar, liste_tablosu
+            from reportlab.lib.units import mm
+            font_name, _ = turkce_fontlar()
 
             # PDF dosya adı: {tarih}_arac_listesi.pdf
             tarih = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -339,7 +318,8 @@ class CarListForm(QDialog):
                 return
 
             # PDF oluştur
-            doc = SimpleDocTemplate(path, pagesize=A4)
+            doc = SimpleDocTemplate(path, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
+                                    topMargin=15 * mm, bottomMargin=15 * mm)
             styles = getSampleStyleSheet()
             styles.add(ParagraphStyle(name='Turkish', fontName=font_name, fontSize=12, leading=16))
             styles.add(ParagraphStyle(name='TurkishTitle', fontName=font_name, fontSize=16, leading=20, alignment=1))
@@ -370,21 +350,8 @@ class CarListForm(QDialog):
                         row_data.append("")
                 data.append(row_data)
 
-            # Tablo oluştur
-            t = Table(data, repeatRows=1, colWidths=[70, 120, 80, 70, 70, 70, 70])
-            t.setStyle(TableStyle([
-                ('FONTNAME', (0, 0), (-1, -1), font_name),
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1976d2")),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('FONTSIZE', (0, 1), (-1, -1), 10),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-                ('GRID', (0, 0), (-1, -1), 0.7, colors.grey),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ]))
+            # Tablo oluştur (uzun metinler hücre içinde alt satıra kayar, tablo sayfaya sığar)
+            t = liste_tablosu(headers, data[1:], [9, 26, 13, 11, 9, 14, 14], doc.width)
             elements.append(t)
 
             # Alt bilgiler

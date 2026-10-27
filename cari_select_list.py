@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 from qtawesome import icon
 import sys
 from database_progress import load_cari_list_for_select  # Veritabanı fonksiyonunu içe aktar
+from hizli_tablo import HizliTablo
 from add_cari import AddCariForm  # Satırın başına ekleyin
 
 class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
@@ -52,7 +53,8 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         filtre_layout = QHBoxLayout()
         filtre_layout.setSpacing(8)
         self.filtre_input = QLineEdit()
-        self.filtre_input.setPlaceholderText("Cari Adı / Ünvanı")
+        self.filtre_input.setPlaceholderText("Cari Kodu, Cari Adı / Ünvanı veya Telefon ile ara...")
+        self.filtre_input.textChanged.connect(self.filtrele)
         self.filtre_input.setMinimumHeight(32)
         self.filtre_input.setStyleSheet("""
             font-size: 13px;
@@ -65,7 +67,7 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         ana_layout.addLayout(filtre_layout)
 
         # Tablo
-        self.table = QTableWidget(0, 4)  # 4 sütun: Cari Kodu, Cari Ünvanı, Telefon, Cari Tipi
+        self.table = HizliTablo()  # 4 sütun: Cari Kodu, Cari Ünvanı, Telefon, Cari Tipi
         self.table.setHorizontalHeaderLabels([
             "Cari Kodu", "Cari Adı / Ünvanı", "Telefon", "Cari Tipi"
         ])
@@ -74,7 +76,7 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet("""
-            QTableWidget {
+            QTableView {
                 font-size: 13px;
                 alternate-background-color: #f5f5f5;
                 background: #fff;
@@ -96,21 +98,13 @@ class CariSelectListForm(QDialog):  # QWidget yerine QDialog kullanıyoruz
 
     def load_data_to_table(self):
         """Veritabanından gelen verileri tabloya yükler."""
-        cariler = load_cari_list_for_select()  # Veritabanından verileri al
-        self.table.setRowCount(len(cariler))  # Satır sayısını ayarla
+        # (cari_kodu, cari_ad_unvan, cep_telefonu, cari_tipi)
+        self.table.kayitlari_yukle(load_cari_list_for_select(), hucreler=lambda cari: cari[:4])
+        self.filtrele()  # Yeni cari eklendikten sonra yenilemede arama korunur
 
-        for row, cari in enumerate(cariler):
-            # Sadece gerekli sütunları al
-            cari_kodu = cari[0]
-            cari_ad_unvan = cari[1]
-            cep_telefonu = cari[2]
-            cari_tipi = cari[3]
-            print(cari_tipi)
-            # Tabloya ekle
-            self.table.setItem(row, 0, QTableWidgetItem(cari_kodu))
-            self.table.setItem(row, 1, QTableWidgetItem(cari_ad_unvan))
-            self.table.setItem(row, 2, QTableWidgetItem(cep_telefonu))
-            self.table.setItem(row, 3, QTableWidgetItem(cari_tipi))
+    def filtrele(self):
+        """Arama kutusuna yazılana göre listeyi süzer (Türkçe harf duyarsız)."""
+        self.table.filtrele(self.filtre_input.text())
 
     def stil_buton(self, text, icon_name, color):
         btn = QPushButton(icon(icon_name, color=color), text)

@@ -4,27 +4,35 @@ from PyQt5.QtWidgets import (
 )
 import pathlib
 from PyQt5.QtGui import QFont, QPixmap, QIcon
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
+import qtawesome
 from qtawesome import icon
 import sys
 import datetime
+import importlib
 import os
+import sqlite3
+import traceback
 import shutil
 import json
 import uuid
-from add_car import AddCarForm
-from add_cari import AddCariForm
-from car_list import CarListForm
-from cari_list import CariListForm
-from servis_form import ServisForm
-from open_service import OpenServiceForm
-from close_service import CloseServiceForm
-from payment_history import PaymentHistoryForm
-from add_new_offer import AddNewOfferForm
-from add_offer import AddOfferForm
-from case import CaseTotalsForm
 from create_database import create_database
 from backup_manager import BackupManager
+
+# qtawesome ilk ikonda paketteki 10 ikon fontunun hepsini doğrulayıp yüklüyor; programda yalnızca bu
+# iki set kullanılıyor (açılış ~%60 daha kısa). Yeni bir set (ör. 'fa5b.') kullanılırsa buraya eklenmeli.
+KULLANILAN_IKON_SETLERI = ("fa5s", "mdi")
+try:
+    qtawesome._BUNDLED_FONTS = tuple(f for f in qtawesome._BUNDLED_FONTS if f[0] in KULLANILAN_IKON_SETLERI)
+except AttributeError:
+    pass  # qtawesome'un iç yapısı değişirse tüm fontlar yüklenir, program yine çalışır
+
+# Form modülleri açılışı yavaşlatmasın diye ilk kullanımda yüklenir; pencere açıldıktan sonra
+# boşta sırayla önceden yüklenir (bkz. Dashboard.formlari_onceden_yukle)
+ONCEDEN_YUKLENECEK_MODULLER = [
+    "servis_form", "open_service", "close_service", "car_list", "cari_list", "add_car", "add_cari",
+    "payment_history", "add_new_offer", "add_offer", "case", "teklif_form", "pdf_aktar", "pdf_belgeler",
+]
 
 # İzin verilen MAC adresleri
 ALLOWED_MACS = [
@@ -307,49 +315,79 @@ class Dashboard(QWidget):
 
         self.setLayout(ana_layout)
 
+    def formlari_onceden_yukle(self, moduller=None):
+        """Form modüllerini her seferinde bir tane olmak üzere yükler; arada arayüz donmaz."""
+        if moduller is None:
+            moduller = list(ONCEDEN_YUKLENECEK_MODULLER)
+        if not moduller:
+            # PDF fontlarını ilk açılışta bir kez hazırlar (sonra önbellekten okunur); arayüzü bekletmez
+            try:
+                import threading
+                import pdf_belgeler
+                threading.Thread(target=pdf_belgeler.fontlari_hazirla, daemon=True).start()
+            except Exception as e:
+                print(f"PDF fontları önceden hazırlanamadı: {e}")
+            return
+        try:
+            importlib.import_module(moduller[0])
+        except Exception as e:
+            print(f"Modül önceden yüklenemedi ({moduller[0]}): {e}")
+        QTimer.singleShot(0, lambda: self.formlari_onceden_yukle(moduller[1:]))
+
     def arac_karti_ekle_ac(self):
+        from add_car import AddCarForm
         self.add_car_form = AddCarForm()
         self.add_car_form.show()
 
     def cari_ekle_ac(self):
+        from add_cari import AddCariForm
         self.add_cari_form = AddCariForm()
         self.add_cari_form.show()
 
     def arac_listesi_ac(self):
+        from car_list import CarListForm
         self.car_list_form = CarListForm()
         self.car_list_form.show()
 
     def cari_listesi_ac(self):
+        from cari_list import CariListForm
         self.cari_list_form = CariListForm()
         self.cari_list_form.show()
 
     def servis_girisi_ekle_ac(self):
+        from servis_form import ServisForm
         self.servis_form = ServisForm(self)
         self.servis_form.setModal(True)
         self.servis_form.show()
 
     def open_open_service_form(self):
+        from open_service import OpenServiceForm
         self.open_service_form = OpenServiceForm()
         self.open_service_form.show()
 
     def open_close_service_form(self):
+        from close_service import CloseServiceForm
         self.close_service_form = CloseServiceForm()
         self.close_service_form.show()
 
     def open_payment_history_form(self):
+        from payment_history import PaymentHistoryForm
         self.payment_history_form = PaymentHistoryForm()
         self.payment_history_form.show()
 
     def open_add_new_offer_form(self):
+        from add_new_offer import AddNewOfferForm
         self.add_new_offer_form = AddNewOfferForm()
         self.add_new_offer_form.setModal(True)
         self.add_new_offer_form.show()
 
     def open_add_offer_form(self):
+        from add_offer import AddOfferForm
         self.add_offer_form = AddOfferForm()
         self.add_offer_form.show()
 
     def open_case_form(self):
+        from case import CaseTotalsForm
         self.case_form = CaseTotalsForm()
         self.case_form.show()
 
@@ -386,7 +424,10 @@ class Dashboard(QWidget):
             if file_path:
                 success, message = self.backup_manager.restore_database_from_file(file_path)
                 if success:
-                    QMessageBox.information(self, "Başarılı", message)
+                    QMessageBox.information(self, "Başarılı",
+                        f"{message}\n\nAçık olan diğer pencereler (Kasa, listeler vb.) eski veriyi gösteriyor olabilir; "
+                        "kapatıp yeniden açın.\nKasa varsayılan olarak bugünün ödemelerini gösterir; eski ödemeler için "
+                        "Kısa Tarih'ten 'Tümü'nü seçin.")
                 else:
                     QMessageBox.critical(self, "Hata", message)
             else:
@@ -401,20 +442,88 @@ def check_database():
         return True
     return False
 
+def veritabanini_hazirla():
+    """
+    Program açılırken veritabanını kullanılabilir hale getirir: yoksa oluşturur, eski/eksikse tamamlar
+    (veriye dokunmadan), açılamıyorsa kullanıcıya yedekten geri yükleme veya yeni veritabanı seçeneği sunar.
+    False dönerse program kapanmalıdır.
+    """
+    from database_progress import veritabani_sorunu
+    try:
+        if check_database():
+            QMessageBox.information(None, "Bilgi", "Veritabanı başarıyla oluşturuldu!")
+    except (sqlite3.Error, OSError) as e:
+        QMessageBox.critical(None, "Hata",
+            f"Veritabanı oluşturulamadı:\n{e}\n\n"
+            f"Program klasörüne yazma izni olmayabilir ({os.getcwd()}).\n"
+            "Programı 'Program Files' dışında bir klasöre (örn. C:\\OTO-SERVIS) taşıyıp tekrar açın.")
+        return False
+
+    sorun = veritabani_sorunu()
+    while sorun:
+        kutu = QMessageBox()
+        kutu.setIcon(QMessageBox.Critical)
+        kutu.setWindowTitle("Veritabanı Açılamıyor")
+        kutu.setText(f"{sorun}\n\nNe yapmak istersiniz?")
+        btn_yedek = kutu.addButton("Yedekten Geri Yükle", QMessageBox.AcceptRole)
+        btn_yeni = kutu.addButton("Yeni Boş Veritabanı", QMessageBox.DestructiveRole)
+        kutu.addButton("Programı Kapat", QMessageBox.RejectRole)
+        kutu.exec_()
+
+        if kutu.clickedButton() is btn_yedek:
+            dosya, _ = QFileDialog.getOpenFileName(None, "Yedek Veritabanı Seç", BackupManager().backup_path,
+                                                   "Veritabanı Dosyaları (*.db)")
+            if dosya:
+                basarili, mesaj = BackupManager().restore_database_from_file(dosya)
+                (QMessageBox.information if basarili else QMessageBox.critical)(None, "Geri Yükleme", mesaj)
+        elif kutu.clickedButton() is btn_yeni:
+            # Bozuk dosya silinmez, yanına adı değiştirilerek bırakılır
+            bozuk = f"oto_servis_acilamayan_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            try:
+                os.replace("oto_servis.db", bozuk)
+                create_database()
+                QMessageBox.information(None, "Bilgi",
+                    f"Yeni boş veritabanı oluşturuldu.\nAçılamayan dosya '{bozuk}' adıyla saklandı.")
+            except (sqlite3.Error, OSError) as e:
+                QMessageBox.critical(None, "Hata", f"Yeni veritabanı oluşturulamadı:\n{e}")
+                return False
+        else:
+            return False
+        sorun = veritabani_sorunu()
+    return True
+
+def beklenmeyen_hata(tur, deger, iz):
+    """Yakalanmamış hatalarda program kapanmasın: kullanıcıya gösterilir ve hata_kaydi.log dosyasına yazılır."""
+    metin = "".join(traceback.format_exception(tur, deger, iz))
+    print(metin)
+    try:
+        with open("hata_kaydi.log", "a", encoding="utf-8") as kayit:
+            kayit.write(f"\n[{datetime.datetime.now():%d.%m.%Y %H:%M:%S}]\n{metin}")
+    except OSError:
+        pass
+    try:
+        QMessageBox.critical(None, "Beklenmeyen Hata",
+            f"İşlem tamamlanamadı:\n{deger}\n\n"
+            "Ayrıntılar program klasöründeki 'hata_kaydi.log' dosyasına yazıldı. Program çalışmaya devam ediyor.")
+    except Exception:
+        pass
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    
+    sys.excepthook = beklenmeyen_hata
+
     # MAC adresi kontrolü
     if not verify_mac_address():
-        QMessageBox.critical(None, "Hata", 
+        QMessageBox.critical(None, "Hata",
             "Bu program sadece yetkili bilgisayarlarda çalışabilir!\n\n"
             "Lütfen sistem yöneticinize başvurun.")
         sys.exit(1)
-    
-    # Veritabanı kontrolü
-    if check_database():
-        QMessageBox.information(None, "Bilgi", "Veritabanı başarıyla oluşturuldu!")
-    
+
+    # Veritabanı kontrolü: yoksa oluşturur, eskiyse tamamlar, açılamıyorsa kullanıcıya sorar
+    if not veritabanini_hazirla():
+        sys.exit(1)
+
     dashboard = Dashboard()
     dashboard.showMaximized()
+    QTimer.singleShot(300, dashboard.formlari_onceden_yukle)
     sys.exit(app.exec_())
